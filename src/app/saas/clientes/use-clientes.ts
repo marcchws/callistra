@@ -1,349 +1,387 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Cliente, ClienteFilters, ClienteFormData, ClienteOperation, TrocaPlanoData, AlteracaoTitularidadeData, ExportOptions } from "./types"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { Cliente, ClienteFilters, ClienteFormData, AlterarTitularidadeData, TrocarPlanoData } from "./types"
 import { toast } from "sonner"
 
-// DADOS MOCKADOS BASEADOS NOS REQUIREMENTS - CENÁRIOS DE TESTE
+// Mock data para desenvolvimento
 const mockClientes: Cliente[] = [
   {
-    id: "CLI001",
-    nomeEscritorio: "Escritório Silva & Associados",
+    id: "1",
+    nomeEscritorio: "Advocacia Silva & Associados",
     nomeContratante: "João Silva",
-    emailContratante: "joao@silvaeassociados.com.br",
+    emailContratante: "joao.silva@advocaciasilva.com.br",
     cnpj: "12.345.678/0001-90",
-    telefone: "+55 11 99999-1234",
-    nomePlano: "Standard",
-    vigenciaPlano: "2025-02-15",
-    valorPlano: 299.99,
-    formaPagamento: "Mensal, cartão de crédito",
-    descricaoPlano: "Plano Standard mensal para até 10 usuários",
+    telefone: "+55 (11) 98765-4321",
+    nomePlano: "PREMIUM",
+    vigenciaPlano: new Date("2025-09-12"),
+    valorPlano: 599.90,
+    formaPagamento: "Plano mensal, à vista no cartão",
+    descricaoPlano: "Plano Premium mensal para até 20 usuários/mês",
     status: "ativa",
-    quantidadeUsuarios: { usado: 8, disponivel: 10 },
-    quantidadeProcessos: { usado: 150, disponivel: 500 },
-    tokensIA: { usado: 800, disponivel: 1000 },
-    dataCriacao: "2024-01-15T10:00:00Z",
-    dataAtualizacao: "2024-12-01T15:30:00Z"
+    usuariosUsados: 12,
+    usuariosDisponiveis: 20,
+    processosUsados: 150,
+    processosDisponiveis: 500,
+    tokensIAUsados: 3500,
+    tokensIADisponiveis: 10000,
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2025-08-01")
   },
   {
-    id: "CLI002",
-    nomeEscritorio: "Advocacia Pereira Ltda",
-    nomeContratante: "Maria Pereira",
-    emailContratante: "maria@advocaciapereira.com.br",
+    id: "2",
+    nomeEscritorio: "Martins Advogados",
+    nomeContratante: "Maria Martins",
+    emailContratante: "maria@martinsadvogados.com",
     cnpj: "98.765.432/0001-10",
-    telefone: "+55 21 98888-5678",
-    nomePlano: "Premium",
-    vigenciaPlano: "2025-08-10",
-    valorPlano: 2399.99,
-    formaPagamento: "Anual, à vista",
-    descricaoPlano: "Plano Premium anual para até 25 usuários",
+    telefone: "+55 (21) 99876-5432",
+    nomePlano: "STANDARD",
+    vigenciaPlano: new Date("2025-12-31"),
+    valorPlano: 299.90,
+    formaPagamento: "Plano anual, 12x no cartão",
+    descricaoPlano: "Plano Standard anual para entre 5 e 10 usuários",
     status: "ativa",
-    quantidadeUsuarios: { usado: 22, disponivel: 25 },
-    quantidadeProcessos: { usado: 1200, disponivel: 2000 },
-    tokensIA: { usado: 4500, disponivel: 5000 },
-    dataCriacao: "2023-08-10T14:20:00Z",
-    dataAtualizacao: "2024-12-05T09:15:00Z"
+    usuariosUsados: 6,
+    usuariosDisponiveis: 10,
+    processosUsados: 75,
+    processosDisponiveis: 200,
+    tokensIAUsados: 1200,
+    tokensIADisponiveis: 5000,
+    createdAt: new Date("2024-06-20"),
+    updatedAt: new Date("2025-07-15")
   },
   {
-    id: "CLI003",
-    nomeEscritorio: "Costa & Santos Advogados",
-    nomeContratante: "Carlos Costa",
-    emailContratante: "carlos@costasantos.adv.br",
-    cnpj: "11.222.333/0001-44",
-    telefone: "+55 31 97777-9012",
-    nomePlano: "Free",
-    vigenciaPlano: "2025-01-20",
+    id: "3",
+    nomeEscritorio: "Costa & Lima Advocacia",
+    nomeContratante: "Pedro Costa",
+    emailContratante: "pedro.costa@costalima.adv.br",
+    cnpj: "45.678.901/0001-23",
+    telefone: "+55 (31) 91234-5678",
+    nomePlano: "FREE",
+    vigenciaPlano: new Date("2025-08-20"),
     valorPlano: 0,
-    formaPagamento: "Gratuito",
-    descricaoPlano: "Plano gratuito para até 3 usuários",
+    formaPagamento: "Plano gratuito",
+    descricaoPlano: "Plano Free para 1 usuário",
     status: "inadimplente",
-    quantidadeUsuarios: { usado: 3, disponivel: 3 },
-    quantidadeProcessos: { usado: 45, disponivel: 50 },
-    tokensIA: { usado: 95, disponivel: 100 },
-    dataCriacao: "2024-11-20T16:45:00Z",
-    dataAtualizacao: "2024-12-20T11:00:00Z"
+    usuariosUsados: 1,
+    usuariosDisponiveis: 1,
+    processosUsados: 8,
+    processosDisponiveis: 10,
+    tokensIAUsados: 0,
+    tokensIADisponiveis: 0,
+    createdAt: new Date("2024-03-10"),
+    updatedAt: new Date("2025-08-10")
   },
   {
-    id: "CLI004",
-    nomeEscritorio: "Oliveira Advocacia",
-    nomeContratante: "Ana Oliveira",
-    emailContratante: "ana@oliveiraadv.com.br",
-    cnpj: "44.555.666/0001-77",
-    telefone: "+55 85 96666-3456",
-    nomePlano: "Enterprise",
-    vigenciaPlano: "2025-05-30",
-    valorPlano: 4999.99,
-    formaPagamento: "Anual, 12x no cartão",
+    id: "4",
+    nomeEscritorio: "Ferreira & Partners",
+    nomeContratante: "Ana Ferreira",
+    emailContratante: "ana@ferreirapartners.com",
+    cnpj: "56.789.012/0001-34",
+    telefone: "+55 (41) 92345-6789",
+    nomePlano: "ENTERPRISE",
+    vigenciaPlano: new Date("2026-01-15"),
+    valorPlano: 1299.90,
+    formaPagamento: "Plano anual, à vista",
     descricaoPlano: "Plano Enterprise anual para usuários ilimitados",
+    status: "ativa",
+    usuariosUsados: 45,
+    usuariosDisponiveis: 999,
+    processosUsados: 850,
+    processosDisponiveis: 9999,
+    tokensIAUsados: 25000,
+    tokensIADisponiveis: 100000,
+    createdAt: new Date("2023-11-05"),
+    updatedAt: new Date("2025-08-05")
+  },
+  {
+    id: "5",
+    nomeEscritorio: "Oliveira Consultoria Jurídica",
+    nomeContratante: "Carlos Oliveira",
+    emailContratante: "carlos@oliveiraconsultoria.com.br",
+    cnpj: "67.890.123/0001-45",
+    telefone: "+55 (51) 93456-7890",
+    nomePlano: "STANDARD",
+    vigenciaPlano: new Date("2025-09-30"),
+    valorPlano: 299.90,
+    formaPagamento: "Plano mensal, à vista no cartão",
+    descricaoPlano: "Plano Standard mensal para entre 5 e 10 usuários",
     status: "inativa",
-    quantidadeUsuarios: { usado: 0, disponivel: 999 },
-    quantidadeProcessos: { usado: 0, disponivel: 10000 },
-    tokensIA: { usado: 0, disponivel: 20000 },
-    dataCriacao: "2024-05-30T08:30:00Z",
-    dataAtualizacao: "2024-11-15T13:20:00Z"
+    usuariosUsados: 3,
+    usuariosDisponiveis: 10,
+    processosUsados: 45,
+    processosDisponiveis: 200,
+    tokensIAUsados: 800,
+    tokensIADisponiveis: 5000,
+    createdAt: new Date("2024-04-12"),
+    updatedAt: new Date("2025-07-30")
   }
 ]
 
 export function useClientes() {
-  const [clientes, setClientes] = useState<Cliente[]>(mockClientes)
+  const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // FILTROS BASEADOS NOS ACCEPTANCE CRITERIA
   const [filters, setFilters] = useState<ClienteFilters>({
-    busca: "",
-    plano: "todos",
-    status: "todos"
+    sortBy: 'nomeEscritorio',
+    sortOrder: 'asc'
   })
 
-  // APLICAR FILTROS - BASEADO NOS CENÁRIOS DE USO
-  const clientesFiltrados = useMemo(() => {
-    return clientes.filter(cliente => {
-      // Filtro de busca (ID, nome empresa, e-mail)
-      const buscaLower = filters.busca.toLowerCase()
-      const matchBusca = !filters.busca || 
-        cliente.id.toLowerCase().includes(buscaLower) ||
-        cliente.nomeEscritorio.toLowerCase().includes(buscaLower) ||
-        cliente.emailContratante.toLowerCase().includes(buscaLower)
-
-      // Filtro por plano
-      const matchPlano = filters.plano === "todos" || 
-        cliente.nomePlano.toLowerCase() === filters.plano.toLowerCase()
-
-      // Filtro por status
-      const matchStatus = filters.status === "todos" || 
-        cliente.status === filters.status
-
-      return matchBusca && matchPlano && matchStatus
-    })
-  }, [clientes, filters])
-
-  // CRIAR CLIENTE - BASEADO NOS ACCEPTANCE CRITERIA
-  const criarCliente = async (data: ClienteFormData) => {
+  // Carrega os clientes
+  const loadClientes = useCallback(async () => {
     setLoading(true)
     setError(null)
     
     try {
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Simula delay de rede
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Em produção, aqui seria uma chamada à API
+      setClientes(mockClientes)
+    } catch (err) {
+      setError("Erro ao carregar clientes")
+      toast.error("Erro ao carregar clientes")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Filtra e ordena clientes
+  const filteredClientes = useMemo(() => {
+    let result = [...clientes]
+    
+    // Aplica busca
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase()
+      result = result.filter(cliente => 
+        cliente.id.toLowerCase().includes(searchLower) ||
+        cliente.nomeEscritorio.toLowerCase().includes(searchLower) ||
+        cliente.emailContratante.toLowerCase().includes(searchLower) ||
+        cliente.nomeContratante.toLowerCase().includes(searchLower)
+      )
+    }
+    
+    // Aplica filtro de plano
+    if (filters.plano) {
+      result = result.filter(cliente => cliente.nomePlano === filters.plano)
+    }
+    
+    // Aplica filtro de status
+    if (filters.status) {
+      result = result.filter(cliente => cliente.status === filters.status)
+    }
+    
+    // Aplica ordenação
+    if (filters.sortBy) {
+      result.sort((a, b) => {
+        const aValue = a[filters.sortBy as keyof Cliente]
+        const bValue = b[filters.sortBy as keyof Cliente]
+        
+        if (aValue === null || aValue === undefined) return 1
+        if (bValue === null || bValue === undefined) return -1
+        
+        const comparison = aValue < bValue ? -1 : aValue > bValue ? 1 : 0
+        return filters.sortOrder === 'asc' ? comparison : -comparison
+      })
+    }
+    
+    return result
+  }, [clientes, filters])
+
+  // Adiciona novo cliente
+  const addCliente = useCallback(async (data: ClienteFormData) => {
+    setLoading(true)
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       const novoCliente: Cliente = {
-        id: `CLI${String(clientes.length + 1).padStart(3, '0')}`,
         ...data,
-        quantidadeUsuarios: { usado: 0, disponivel: 10 }, // Default baseado no plano
-        quantidadeProcessos: { usado: 0, disponivel: 500 },
-        tokensIA: { usado: 0, disponivel: 1000 },
-        dataCriacao: new Date().toISOString(),
-        dataAtualizacao: new Date().toISOString()
+        id: String(Date.now()),
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
       
       setClientes(prev => [...prev, novoCliente])
-      toast.success("Cliente cadastrado com sucesso!", { 
-        duration: 2000,
-        position: "bottom-right"
-      })
+      toast.success("Cliente cadastrado com sucesso!")
       
-      return { success: true, message: "Cliente criado com sucesso", data: novoCliente }
+      return novoCliente
     } catch (err) {
-      const message = "Erro ao criar cliente"
-      setError(message)
-      toast.error(message, { duration: 3000, position: "bottom-right" })
-      return { success: false, message }
+      toast.error("Erro ao cadastrar cliente")
+      throw err
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  // ATUALIZAR CLIENTE
-  const atualizarCliente = async (id: string, data: Partial<ClienteFormData>) => {
+  // Atualiza cliente existente
+  const updateCliente = useCallback(async (id: string, data: Partial<ClienteFormData>) => {
     setLoading(true)
-    setError(null)
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       setClientes(prev => prev.map(cliente => 
         cliente.id === id 
-          ? { ...cliente, ...data, dataAtualizacao: new Date().toISOString() }
+          ? { ...cliente, ...data, updatedAt: new Date() }
           : cliente
       ))
       
-      toast.success("Cliente atualizado com sucesso!", { 
-        duration: 2000,
-        position: "bottom-right"
-      })
-      
-      return { success: true, message: "Cliente atualizado com sucesso" }
+      toast.success("Cliente atualizado com sucesso!")
     } catch (err) {
-      const message = "Erro ao atualizar cliente"
-      setError(message)
-      toast.error(message, { duration: 3000, position: "bottom-right" })
-      return { success: false, message }
+      toast.error("Erro ao atualizar cliente")
+      throw err
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  // ATIVAR/INATIVAR CLIENTE - BASEADO NOS ACCEPTANCE CRITERIA
-  const toggleStatusCliente = async (id: string) => {
+  // Remove cliente
+  const deleteCliente = useCallback(async (id: string) => {
     setLoading(true)
-    setError(null)
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 800))
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      setClientes(prev => prev.filter(cliente => cliente.id !== id))
+      toast.success("Cliente removido com sucesso!")
+    } catch (err) {
+      toast.error("Erro ao remover cliente")
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Altera titularidade
+  const alterarTitularidade = useCallback(async (id: string, data: AlterarTitularidadeData) => {
+    setLoading(true)
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      setClientes(prev => prev.map(cliente => 
+        cliente.id === id 
+          ? { 
+              ...cliente, 
+              nomeContratante: data.novoNome,
+              emailContratante: data.novoEmail,
+              telefone: data.novoTelefone,
+              updatedAt: new Date() 
+            }
+          : cliente
+      ))
+      
+      toast.success("Titularidade alterada com sucesso!")
+    } catch (err) {
+      toast.error("Erro ao alterar titularidade")
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Troca plano do cliente
+  const trocarPlano = useCallback(async (id: string, data: TrocarPlanoData) => {
+    setLoading(true)
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      setClientes(prev => prev.map(cliente => 
+        cliente.id === id 
+          ? { 
+              ...cliente, 
+              nomePlano: data.novoPlano,
+              valorPlano: data.novoValor,
+              descricaoPlano: data.novaDescricao,
+              updatedAt: new Date() 
+            }
+          : cliente
+      ))
+      
+      toast.success("Plano alterado com sucesso!")
+    } catch (err) {
+      toast.error("Erro ao alterar plano")
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Ativa/Inativa cliente
+  const toggleStatus = useCallback(async (id: string) => {
+    setLoading(true)
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       setClientes(prev => prev.map(cliente => {
         if (cliente.id === id) {
-          const novoStatus = cliente.status === 'ativa' ? 'inativa' : 'ativa'
+          const newStatus = cliente.status === 'ativa' ? 'inativa' : 'ativa'
+          toast.success(`Cliente ${newStatus === 'ativa' ? 'ativado' : 'inativado'} com sucesso!`)
           return { 
             ...cliente, 
-            status: novoStatus,
-            dataAtualizacao: new Date().toISOString()
+            status: newStatus as keyof typeof cliente.status,
+            updatedAt: new Date() 
           }
         }
         return cliente
       }))
-      
-      toast.success("Status do cliente alterado com sucesso!", { 
-        duration: 2000,
-        position: "bottom-right"
-      })
-      
-      return { success: true, message: "Status alterado com sucesso" }
     } catch (err) {
-      const message = "Erro ao alterar status do cliente"
-      setError(message)
-      toast.error(message, { duration: 3000, position: "bottom-right" })
-      return { success: false, message }
+      toast.error("Erro ao alterar status do cliente")
+      throw err
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  // TROCAR PLANO - BASEADO NOS ACCEPTANCE CRITERIA
-  const trocarPlano = async (data: TrocaPlanoData) => {
+  // Exporta dados
+  const exportData = useCallback(async (format: 'pdf' | 'excel') => {
     setLoading(true)
-    setError(null)
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, 500))
       
-      setClientes(prev => prev.map(cliente => 
-        cliente.id === data.clienteId 
-          ? { 
-              ...cliente, 
-              nomePlano: data.novoPlano,
-              dataAtualizacao: new Date().toISOString()
-            }
-          : cliente
-      ))
+      // Em produção, aqui seria a geração real do arquivo
+      toast.success(`Exportação em ${format.toUpperCase()} iniciada!`)
       
-      toast.success("Plano alterado com sucesso!", { 
-        duration: 2000,
-        position: "bottom-right"
-      })
+      // Simula download
+      const blob = new Blob([JSON.stringify(filteredClientes, null, 2)], 
+        { type: format === 'pdf' ? 'application/pdf' : 'application/vnd.ms-excel' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `clientes.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+      a.click()
+      URL.revokeObjectURL(url)
       
-      return { success: true, message: "Plano alterado com sucesso" }
     } catch (err) {
-      const message = "Erro ao alterar plano"
-      setError(message)
-      toast.error(message, { duration: 3000, position: "bottom-right" })
-      return { success: false, message }
+      toast.error(`Erro ao exportar em ${format.toUpperCase()}`)
+      throw err
     } finally {
       setLoading(false)
     }
-  }
+  }, [filteredClientes])
 
-  // ALTERAR TITULARIDADE - BASEADO NOS ACCEPTANCE CRITERIA
-  const alterarTitularidade = async (data: AlteracaoTitularidadeData) => {
-    setLoading(true)
-    setError(null)
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      setClientes(prev => prev.map(cliente => 
-        cliente.id === data.clienteId 
-          ? { 
-              ...cliente, 
-              emailContratante: data.novoEmail,
-              nomeContratante: data.novoNome,
-              telefone: data.novoTelefone,
-              dataAtualizacao: new Date().toISOString()
-            }
-          : cliente
-      ))
-      
-      toast.success("Titularidade alterada com sucesso!", { 
-        duration: 2000,
-        position: "bottom-right"
-      })
-      
-      return { success: true, message: "Titularidade alterada com sucesso" }
-    } catch (err) {
-      const message = "Erro ao alterar titularidade"
-      setError(message)
-      toast.error(message, { duration: 3000, position: "bottom-right" })
-      return { success: false, message }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // EXPORTAR DADOS - BASEADO NOS ACCEPTANCE CRITERIA
-  const exportarDados = async (options: ExportOptions) => {
-    setLoading(true)
-    setError(null)
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      const dadosExportar = options.selectedIds?.length 
-        ? clientes.filter(c => options.selectedIds!.includes(c.id))
-        : clientesFiltrados
-      
-      // Simular download
-      console.log(`Exportando ${dadosExportar.length} clientes em formato ${options.format}`)
-      
-      toast.success(`Dados exportados em ${options.format.toUpperCase()} com sucesso!`, { 
-        duration: 2000,
-        position: "bottom-right"
-      })
-      
-      return { success: true, message: "Dados exportados com sucesso" }
-    } catch (err) {
-      const message = "Erro ao exportar dados"
-      setError(message)
-      toast.error(message, { duration: 3000, position: "bottom-right" })
-      return { success: false, message }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // LIMPAR FILTROS - BASEADO NOS CENÁRIOS DE USO
-  const limparFiltros = () => {
-    setFilters({
-      busca: "",
-      plano: "todos",
-      status: "todos"
-    })
-  }
+  // Carrega clientes ao montar
+  useEffect(() => {
+    loadClientes()
+  }, [loadClientes])
 
   return {
-    clientes: clientesFiltrados,
+    clientes: filteredClientes,
     loading,
     error,
     filters,
     setFilters,
-    criarCliente,
-    atualizarCliente,
-    toggleStatusCliente,
-    trocarPlano,
+    addCliente,
+    updateCliente,
+    deleteCliente,
     alterarTitularidade,
-    exportarDados,
-    limparFiltros,
-    totalClientes: clientes.length,
-    totalFiltrados: clientesFiltrados.length
+    trocarPlano,
+    toggleStatus,
+    exportData,
+    reload: loadClientes
   }
 }

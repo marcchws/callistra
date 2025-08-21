@@ -15,7 +15,15 @@ import { LucideIcon,
   Briefcase,
   UserCheck,
   BookOpen,
-  Clock
+  Clock,
+  Target,
+  Headphones,
+  UserCog,
+  Globe,
+  Edit,
+  LogIn,
+  KeyRound,
+  Bot
 } from "lucide-react"
 
 export interface SidebarItem {
@@ -29,11 +37,18 @@ export interface SidebarItem {
 export const sidebarConfig: SidebarItem[] = [
   // Sistema e Infraestrutura
   {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
+    title: "Login: Autenticação",
+    href: "/sistema/auth/login",
+    icon: LogIn,
     module: "sistema",
-    description: "Visão geral do sistema"
+    description: "Sistema de autenticação de usuários"
+  },
+  {
+    title: "Recuperação de Senha",
+    href: "/sistema/auth/recuperar-senha",
+    icon: KeyRound,
+    module: "sistema",
+    description: "Recuperação de senha via e-mail"
   },
   {
     title: "Alertas e Notificações",
@@ -52,6 +67,27 @@ export const sidebarConfig: SidebarItem[] = [
   
   // SaaS Admin (Callistra)
   {
+    title: "Landing Page - Site",
+    href: "/saas/landing-page",
+    icon: Globe,
+    module: "saas",
+    description: "Landing Page institucional responsiva com conformidade LGPD"
+  },
+  {
+    title: "Gestão do Site: Edição de Conteúdo",
+    href: "/saas/gestao-site",
+    icon: Edit,
+    module: "saas",
+    description: "Editor simplificado de conteúdo da Landing Page com formatação básica e gestão de imagens"
+  },
+  {
+    title: "Dashboard de Assinaturas",
+    href: "/saas/dashboard-assinaturas",
+    icon: BarChart3,
+    module: "saas",
+    description: "Visão geral das métricas de assinaturas"
+  },
+  {
     title: "Gestão de Planos",
     href: "/saas/planos",
     icon: Settings,
@@ -65,28 +101,77 @@ export const sidebarConfig: SidebarItem[] = [
     module: "saas",
     description: "Gestão de escritórios clientes"
   },
+  {
+    title: "Usuários Internos",
+    href: "/saas/usuarios-internos",
+    icon: UserCog,
+    module: "saas",
+    description: "Gerenciamento de usuários internos do SaaS"
+  },
+  {
+    title: "Níveis de Acesso",
+    href: "/saas/niveis-acesso",
+    icon: Shield,
+    module: "saas",
+    description: "Criação e gestão de perfis de acesso"
+  },
+  {
+    title: "Pesquisas NPS",
+    href: "/saas/pesquisas-nps",
+    icon: Target,
+    module: "saas",
+    description: "Criação e análise de pesquisas de satisfação"
+  },
+  {
+    title: "Tickets de Suporte",
+    href: "/saas/tickets-suporte",
+    icon: Headphones,
+    module: "saas",
+    description: "Gestão de tickets de suporte dos clientes"
+  },
   
   // Escritório como Cliente
   {
-    title: "Usuários",
-    href: "/escritorio/usuarios",
+    title: "Registro de Escritório",
+    href: "/cliente/registro",
+    icon: Building,
+    module: "escritorio",
+    description: "Cadastro de novo escritório no sistema"
+  },
+  {
+    title: "Selecionar Plano de Assinatura",
+    href: "/cliente/selecionar-plano",
+    icon: CreditCard,
+    module: "escritorio",
+    description: "Seleção e contratação de planos de assinatura"
+  },
+  {
+    title: "Níveis de Acesso",
+    href: "/cliente/niveis-acesso",
+    icon: Shield,
+    module: "escritorio",
+    description: "Criação e gestão de perfis de acesso com permissões granulares"
+  },
+  {
+    title: "Gerenciar Usuários Internos",
+    href: "/cliente/usuarios-internos",
     icon: Users,
     module: "escritorio",
-    description: "Gerenciar usuários internos"
+    description: "Cadastro, edição, busca, filtragem e gerenciamento completo de usuários internos com controle de permissões e rastreabilidade"
   },
   {
-    title: "Clientes",
-    href: "/escritorio/clientes",
+    title: "Cadastro de Clientes",
+    href: "/cliente/cadastro",
     icon: UserCheck,
     module: "escritorio",
-    description: "Cadastro de clientes"
+    description: "Cadastro, edição e gerenciamento de clientes pessoa física, jurídica e parceiros, com controle de confidencialidade e histórico financeiro"
   },
   {
-    title: "Processos",
-    href: "/escritorio/processos",
+    title: "Gestão de Processos",
+    href: "/cliente/gestao-processos",
     icon: FileText,
     module: "escritorio",
-    description: "Gestão de processos"
+    description: "Cadastre, consulte e gerencie processos jurídicos com controle de acesso e rastreabilidade completa"
   },
   {
     title: "Especialidades",
@@ -100,49 +185,63 @@ export const sidebarConfig: SidebarItem[] = [
     href: "/escritorio/agenda",
     icon: Calendar,
     module: "escritorio",
-    description: "Agenda de compromissos"
+    description: "Agendamento, visualização e gerenciamento de compromissos, reuniões, tarefas e bloqueios com eventos recorrentes, notificações, anexos e integração com clientes e processos"
   },
   {
     title: "Contratos e Procurações",
-    href: "/escritorio/contratos",
+    href: "/cliente/contratos-procuracoes",
     icon: Briefcase,
     module: "escritorio",
-    description: "Gestão de contratos"
+    description: "Criação, edição e gerenciamento de contratos e procurações com modelos do sistema, upload de modelos próprios, integração financeira, acompanhamento de valores negociados, renegociações, status de pagamentos e exportação em PDF/Word"
   },
   {
     title: "Tarefas",
-    href: "/escritorio/tarefas",
+    href: "/cliente/tarefas",
     icon: Clock,
     module: "escritorio",
-    description: "Gerenciamento de tarefas"
+    description: "Cadastro e gerenciamento de tarefas com anexos, priorização, categorização detalhada e vinculação a processos, clientes e advogados responsáveis"
   },
   {
     title: "Chat Interno",
-    href: "/escritorio/chat-interno",
+    href: "/cliente/chat-interno",
     icon: MessageSquare,
     module: "escritorio",
-    description: "Comunicação interna"
+    description: "Troca de mensagens em tempo real entre usuários e clientes externos com áudios, anexos e histórico completo"
   },
   {
     title: "Helpdesk",
-    href: "/escritorio/helpdesk",
+    href: "/cliente/helpdesk",
     icon: HelpCircle,
     module: "escritorio",
-    description: "Suporte interno"
+    description: "Sistema de tickets de suporte com chat em tempo real para comunicação entre clientes e atendentes"
   },
   {
     title: "Receitas e Despesas",
-    href: "/escritorio/receitas-despesas",
+    href: "/cliente/receitas-despesas",
     icon: Receipt,
     module: "escritorio",
-    description: "Gestão financeira"
+    description: "Cadastro e gerenciamento de receitas e despesas com categorizações, anexos, renegociações e agrupamentos por processo ou beneficiário"
+  },
+  {
+    title: "Criação de peças com IA",
+    href: "/cliente/criacao-pecas-ia",
+    icon: Bot,
+    module: "escritorio",
+    description: "Revisão ortográfica, pesquisa de jurisprudência e criação de peças jurídicas com auxílio de IA, controle de tokens por plano e compartilhamento"
+  },
+  {
+    title: "Dashboard Analítico",
+    href: "/cliente/dashboard-analitico",
+    icon: BarChart3,
+    module: "escritorio",
+    description: "Indicadores estratégicos e operacionais com visualização de processos, faturamento, produtividade e exportação de dados"
   },
   {
     title: "Balancete",
-    href: "/escritorio/balancete",
+    href: "/cliente/balancete",
     icon: BarChart3,
     module: "escritorio",
-    description: "Relatórios financeiros"
+    description: "Relatório centralizado da posição financeira com ganhos, honorários, despesas, inadimplência e indicadores de performance com exportação PDF/CSV"
   },
 ]
 

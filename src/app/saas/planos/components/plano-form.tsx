@@ -1,105 +1,104 @@
 "use client"
 
-import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { PlanoFormData, PlanoFormSchema, Plano } from "../types"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
-import { Loader2, Eye } from "lucide-react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { CalendarIcon, Loader2 } from "lucide-react"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { cn } from "@/lib/utils"
+import { Plano, PlanoFormData, PlanoFormSchema } from "../types"
+import { useEffect } from "react"
 
 interface PlanoFormProps {
   plano?: Plano | null
-  onSubmit: (data: PlanoFormData) => Promise<void>
-  onCancel: () => void
-  loading?: boolean
-  title: string
-  description: string
+  isOpen: boolean
+  loading: boolean
+  onClose: () => void
+  onSubmit: (data: PlanoFormData) => void
 }
 
-// COMPONENTE SEGUINDO FORM LAYOUT DO CALLISTRA-PATTERNS.MD
-export function PlanoForm({ plano, onSubmit, onCancel, loading = false, title, description }: PlanoFormProps) {
-  const [showPreview, setShowPreview] = useState(false)
-  
-  // FORM SETUP COM ZOD VALIDATION
+// Formulário baseado EXATAMENTE nos campos especificados no PRD
+export function PlanoForm({ plano, isOpen, loading, onClose, onSubmit }: PlanoFormProps) {
   const form = useForm<PlanoFormData>({
     resolver: zodResolver(PlanoFormSchema),
-    defaultValues: plano ? {
-      nome: plano.nome,
-      descricao: plano.descricao,
-      precoMensal: plano.precoMensal,
-      precoAnual: plano.precoAnual,
-      ativo: plano.ativo,
-      limitacoes: plano.limitacoes,
-      recursos: plano.recursos
-    } : {
+    defaultValues: {
       nome: "",
+      status: "ativo",
+      valor: 0,
+      formaPagamento: "",
       descricao: "",
-      precoMensal: 0,
-      precoAnual: 0,
-      ativo: true,
-      limitacoes: {
-        maxUsuarios: 1,
-        maxProcessos: 1,
-        storageGB: 1
-      },
-      recursos: {
-        gestaoUsuarios: true,
-        gestaoClientes: true,
-        gestaoProcessos: true,
-        agenda: false,
-        contratos: false,
-        tarefas: false,
-        chatInterno: false,
-        helpdesk: false,
-        financeiro: false,
-        relatorios: false
-      }
+      periodoFree: 0,
+      quantidadeUsuarios: 1,
+      quantidadeProcessos: 1,
+      quantidadeTokensMensais: 0,
+      diasInadimplencia: 5,
+      diasBloqueio: 15,
+      visivelSite: true,
+      planoRecomendado: false
     }
   })
 
-  const handleSubmit = async (data: PlanoFormData) => {
-    await onSubmit(data)
+  // Carregar dados do plano para edição
+  useEffect(() => {
+    if (plano && isOpen) {
+      form.reset({
+        nome: plano.nome,
+        status: plano.status,
+        vigencia: plano.vigencia,
+        valor: plano.valor,
+        formaPagamento: plano.formaPagamento,
+        descricao: plano.descricao,
+        periodoFree: plano.periodoFree,
+        quantidadeUsuarios: plano.quantidadeUsuarios,
+        quantidadeProcessos: plano.quantidadeProcessos,
+        quantidadeTokensMensais: plano.quantidadeTokensMensais,
+        diasInadimplencia: plano.diasInadimplencia,
+        diasBloqueio: plano.diasBloqueio,
+        visivelSite: plano.visivelSite,
+        planoRecomendado: plano.planoRecomendado,
+        valorComDesconto: plano.valorComDesconto
+      })
+    } else if (!plano && isOpen) {
+      form.reset()
+    }
+  }, [plano, isOpen, form])
+
+  const handleSubmit = (data: PlanoFormData) => {
+    onSubmit(data)
   }
 
-  const handlePreview = () => {
-    const formData = form.getValues()
-    setShowPreview(true)
+  const handleClose = () => {
+    form.reset()
+    onClose()
   }
-
-  // CALCULAR ECONOMIA ANUAL
-  const calcularEconomiaAnual = (mensal: number, anual: number) => {
-    const anualizadoMensal = mensal * 12
-    return anualizadoMensal - anual
-  }
-
-  const formData = form.watch()
 
   return (
-    <>
-      {/* SEGUINDO FORM LAYOUT PATTERN OBRIGATÓRIO */}
-      <Card className="max-w-4xl mx-auto">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-xl font-semibold">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        
-        <CardContent className="space-y-6">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-              
-              {/* INFORMAÇÕES BÁSICAS */}
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold">
+            {plano ? "Editar Plano" : "Novo Plano"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            <div className="space-y-4">
+              {/* Informações Básicas */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Informações Básicas</h3>
+                <h3 className="text-lg font-medium border-b pb-2">Informações Básicas</h3>
                 
                 <div className="grid gap-4 md:grid-cols-2">
+                  {/* Nome do plano - Campo Obrigatório */}
                   <FormField
                     control={form.control}
                     name="nome"
@@ -110,55 +109,111 @@ export function PlanoForm({ plano, onSubmit, onCancel, loading = false, title, d
                         </FormLabel>
                         <FormControl>
                           <Input 
-                            placeholder="Ex: Plano Básico" 
-                            {...field} 
+                            placeholder="Ex: Free, Standard, Premium..." 
+                            {...field}
                             className="focus:ring-blue-500"
                           />
                         </FormControl>
+                        <FormDescription>
+                          Nome de visualização do plano para o contratante
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
+
+                  {/* Status do Plano */}
                   <FormField
                     control={form.control}
-                    name="ativo"
+                    name="status"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Plano Ativo</FormLabel>
-                          <FormDescription>
-                            Planos ativos ficam disponíveis para contratação
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">
+                          Status do Plano <span className="text-red-500">*</span>
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="focus:ring-blue-500">
+                              <SelectValue placeholder="Selecionar status..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="ativo">Ativo</SelectItem>
+                            <SelectItem value="inativo">Inativo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Define se o plano está ativo ou inativo no sistema
+                        </FormDescription>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-                
+
+                {/* Vigência do plano - opcional */}
+                <FormField
+                  control={form.control}
+                  name="vigencia"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="text-sm font-medium">Vigência do Plano</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full pl-3 text-left font-normal focus:ring-blue-500",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+                              ) : (
+                                <span>Selecionar data de expiração...</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => date <= new Date()}
+                            initialFocus
+                            locale={ptBR}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormDescription>
+                        Data em que o plano irá vencer/expirar (opcional). Ex: plano promocional
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Descrição do plano - Campo obrigatório */}
                 <FormField
                   control={form.control}
                   name="descricao"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-sm font-medium">
-                        Descrição <span className="text-red-500">*</span>
+                        Descrição do Plano <span className="text-red-500">*</span>
                       </FormLabel>
                       <FormControl>
                         <Textarea 
-                          placeholder="Descreva as características do plano..."
-                          className="min-h-20 focus:ring-blue-500"
+                          placeholder="Ex: Plano Standard mensal para até 10 usuários com funcionalidades completas..."
+                          className="resize-none focus:ring-blue-500"
                           {...field}
                         />
                       </FormControl>
                       <FormDescription>
-                        Descrição que será exibida aos clientes
+                        Descrição do que foi adquirido no plano
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -166,432 +221,338 @@ export function PlanoForm({ plano, onSubmit, onCancel, loading = false, title, d
                 />
               </div>
 
-              <Separator />
-
-              {/* PREÇOS */}
+              {/* Configurações Financeiras */}
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Preços</h3>
+                <h3 className="text-lg font-medium border-b pb-2">Configurações Financeiras</h3>
                 
                 <div className="grid gap-4 md:grid-cols-2">
+                  {/* Valor do plano - Campo obrigatório */}
                   <FormField
                     control={form.control}
-                    name="precoMensal"
+                    name="valor"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-sm font-medium">
-                          Preço Mensal (R$) <span className="text-red-500">*</span>
+                          Valor do Plano (R$) <span className="text-red-500">*</span>
                         </FormLabel>
                         <FormControl>
                           <Input 
                             type="number"
                             step="0.01"
-                            placeholder="0,00"
+                            min="0"
+                            placeholder="0.00"
                             {...field}
                             onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                             className="focus:ring-blue-500"
                           />
                         </FormControl>
+                        <FormDescription>
+                          Valor pago pelo plano
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
+
+                  {/* Valor com desconto - opcional */}
                   <FormField
                     control={form.control}
-                    name="precoAnual"
+                    name="valorComDesconto"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-medium">
-                          Preço Anual (R$) <span className="text-red-500">*</span>
-                        </FormLabel>
+                        <FormLabel className="text-sm font-medium">Valor com Desconto (R$)</FormLabel>
                         <FormControl>
                           <Input 
                             type="number"
                             step="0.01"
-                            placeholder="0,00"
-                            {...field}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                            min="0"
+                            placeholder="0.00"
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
                             className="focus:ring-blue-500"
                           />
                         </FormControl>
-                        {formData.precoMensal > 0 && formData.precoAnual > 0 && (
+                        <FormDescription>
+                          Valor com desconto (Black Friday, Mês do Consumidor, etc.)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Forma de pagamento - Campo obrigatório */}
+                <FormField
+                  control={form.control}
+                  name="formaPagamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">
+                        Forma de Pagamento <span className="text-red-500">*</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Ex: Plano anual à vista, Plano mensal 12x no cartão..."
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Forma de pagamento do plano
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Limites e Configurações */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Limites e Configurações</h3>
+                
+                <div className="grid gap-4 md:grid-cols-2">
+                  {/* Período Free */}
+                  <FormField
+                    control={form.control}
+                    name="periodoFree"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Período Free (dias)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            className="focus:ring-blue-500"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Dias gratuitos de teste antes de iniciar cobrança
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Quantidade de usuários */}
+                  <FormField
+                    control={form.control}
+                    name="quantidadeUsuarios"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">
+                          Limite de Usuários <span className="text-red-500">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            min="1"
+                            placeholder="1"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                            className="focus:ring-blue-500"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Limite máximo de usuários que podem ser criados
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Quantidade de processos */}
+                  <FormField
+                    control={form.control}
+                    name="quantidadeProcessos"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">
+                          Limite de Processos <span className="text-red-500">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            min="1"
+                            placeholder="1"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                            className="focus:ring-blue-500"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Limite máximo de processos que podem ser criados
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Quantidade de Tokens mensais */}
+                  <FormField
+                    control={form.control}
+                    name="quantidadeTokensMensais"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Tokens Mensais (IA)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            className="focus:ring-blue-500"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Tokens mensais para criação de peças, revisão ortográfica e pesquisas
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Configurações de Inadimplência */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Configurações de Inadimplência</h3>
+                
+                <div className="grid gap-4 md:grid-cols-2">
+                  {/* Dias para Inadimplência */}
+                  <FormField
+                    control={form.control}
+                    name="diasInadimplencia"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Dias para Inadimplência</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            min="0"
+                            max="90"
+                            placeholder="5"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            className="focus:ring-blue-500"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Dias após vencimento para aguardar antes de categorizar como inadimplente
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Dias para bloqueio */}
+                  <FormField
+                    control={form.control}
+                    name="diasBloqueio"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Dias para Bloqueio</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            min="0"
+                            max="365"
+                            placeholder="15"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                            className="focus:ring-blue-500"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Dias inadimplente antes de bloquear acesso do escritório
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Configurações de Exibição */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Configurações de Exibição</h3>
+                
+                <div className="space-y-4">
+                  {/* Visível no site */}
+                  <FormField
+                    control={form.control}
+                    name="visivelSite"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="text-sm font-medium">
+                            Visível no Site de Vendas
+                          </FormLabel>
                           <FormDescription>
-                            Economia anual: R$ {calcularEconomiaAnual(formData.precoMensal, formData.precoAnual).toFixed(2)}
+                            Define se o plano será exibido na Landing Page
                           </FormDescription>
-                        )}
-                        <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Plano recomendado */}
+                  <FormField
+                    control={form.control}
+                    name="planoRecomendado"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="text-sm font-medium">
+                            Plano Recomendado
+                          </FormLabel>
+                          <FormDescription>
+                            Exibe etiqueta visual de "Plano Recomendado" no site
+                          </FormDescription>
+                        </div>
                       </FormItem>
                     )}
                   />
                 </div>
               </div>
-
-              <Separator />
-
-              {/* LIMITAÇÕES */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Limitações</h3>
-                
-                <div className="grid gap-4 md:grid-cols-3">
-                  <FormField
-                    control={form.control}
-                    name="limitacoes.maxUsuarios"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">
-                          Máx. Usuários <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number"
-                            min="1"
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                            className="focus:ring-blue-500"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="limitacoes.maxProcessos"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">
-                          Máx. Processos <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number"
-                            min="1"
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                            className="focus:ring-blue-500"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="limitacoes.storageGB"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">
-                          Storage (GB) <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number"
-                            min="1"
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                            className="focus:ring-blue-500"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* RECURSOS INCLUSOS */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Recursos Inclusos</h3>
-                
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  <FormField
-                    control={form.control}
-                    name="recursos.gestaoUsuarios"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Gestão de Usuários</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.gestaoClientes"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Gestão de Clientes</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.gestaoProcessos"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Gestão de Processos</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.agenda"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Agenda</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.contratos"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Contratos</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.tarefas"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Tarefas</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.chatInterno"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Chat Interno</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.helpdesk"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Helpdesk</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.financeiro"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Financeiro</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="recursos.relatorios"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-sm font-medium">Relatórios</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-        
-        {/* SEGUINDO CARDFOOTER PATTERN */}
-        <CardFooter className="flex justify-between gap-3">
-          <Button 
-            variant="outline" 
-            onClick={handlePreview}
-            disabled={loading}
-            className="gap-2"
-          >
-            <Eye className="h-4 w-4" />
-            Visualizar
-          </Button>
-          
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={onCancel} disabled={loading}>
-              Cancelar
-            </Button>
-            <Button 
-              type="submit"
-              onClick={form.handleSubmit(handleSubmit)}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {loading ? "Salvando..." : "Salvar"}
-            </Button>
-          </div>
-        </CardFooter>
-      </Card>
-
-      {/* MODAL DE PREVIEW */}
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Preview do Plano</DialogTitle>
-            <DialogDescription>
-              Visualização do plano como será exibido aos clientes
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="text-center space-y-2">
-              <h3 className="text-2xl font-bold">{formData.nome}</h3>
-              <p className="text-muted-foreground">{formData.descricao}</p>
-              <div className="flex items-center justify-center gap-2">
-                <Badge variant={formData.ativo ? "default" : "secondary"}>
-                  {formData.ativo ? "Ativo" : "Inativo"}
-                </Badge>
-              </div>
             </div>
-            
-            <div className="text-center space-y-1">
-              <div className="text-3xl font-bold">R$ {formData.precoMensal?.toFixed(2)}</div>
-              <div className="text-sm text-muted-foreground">por mês</div>
-              <div className="text-sm">ou R$ {formData.precoAnual?.toFixed(2)} por ano</div>
-              {formData.precoMensal > 0 && formData.precoAnual > 0 && (
-                <div className="text-sm text-green-600">
-                  Economize R$ {calcularEconomiaAnual(formData.precoMensal, formData.precoAnual).toFixed(2)} por ano
-                </div>
-              )}
-            </div>
-            
-            <div className="space-y-3">
-              <h4 className="font-medium">Limitações:</h4>
-              <ul className="text-sm space-y-1">
-                <li>• Até {formData.limitacoes.maxUsuarios} usuários</li>
-                <li>• Até {formData.limitacoes.maxProcessos} processos</li>
-                <li>• {formData.limitacoes.storageGB} GB de armazenamento</li>
-              </ul>
-            </div>
-            
-            <div className="space-y-3">
-              <h4 className="font-medium">Recursos inclusos:</h4>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                {Object.entries(formData.recursos).map(([key, value]) => {
-                  const labels: Record<string, string> = {
-                    gestaoUsuarios: "Gestão de Usuários",
-                    gestaoClientes: "Gestão de Clientes", 
-                    gestaoProcessos: "Gestão de Processos",
-                    agenda: "Agenda",
-                    contratos: "Contratos",
-                    tarefas: "Tarefas",
-                    chatInterno: "Chat Interno",
-                    helpdesk: "Helpdesk",
-                    financeiro: "Financeiro",
-                    relatorios: "Relatórios"
-                  }
-                  
-                  return (
-                    <div key={key} className={`flex items-center gap-2 ${value ? "text-green-600" : "text-gray-400"}`}>
-                      <span>{value ? "✓" : "✗"}</span>
-                      <span>{labels[key]}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+
+            <DialogFooter className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {loading ? "Salvando..." : plano ? "Atualizar" : "Criar Plano"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   )
 }
