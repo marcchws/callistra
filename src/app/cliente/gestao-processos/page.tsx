@@ -1,100 +1,123 @@
 "use client"
 
-import { useState } from "react"
-import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog"
-import { useProcessos } from "./use-processos"
-import { ProcessosFilters } from "./components/processos-filters"
-import { ProcessosList } from "./components/processos-list"
-import { ProcessoForm } from "./components/processo-form"
-import { ProcessoHistoricoComponent } from "./components/processo-historico"
+import { Sidebar } from "@/components/sidebar"
+import { ProcessoTable } from "./components/processo-table"
+import { ProcessoFilters } from "./components/processo-filters"
+import { useProcessos } from "./hooks/use-processos"
+import { useProcessoFilters } from "./hooks/use-processo-filters"
+import { toast } from "sonner"
 
 export default function GestaoProcessosPage() {
   const {
-    // Estado
     processos,
     loading,
-    filtros,
-    processoSelecionado,
-    modalAberto,
-    modoEdicao,
-    historicoAberto,
-
-    // Ações CRUD
-    criarProcesso,
-    editarProcesso,
-    excluirProcesso,
-
-    // Controles de filtro e busca
-    setFiltros,
-
-    // Controles de UI
-    abrirModal,
-    fecharModal,
-    abrirHistorico,
-    fecharHistorico
+    error,
+    deleteProcesso,
+    updateProcesso,
+    addHistorico
   } = useProcessos()
 
-  // Total de processos sem filtros para estatísticas
-  const totalProcessos = 20 // Simular total geral
+  const {
+    filters,
+    updateFilter,
+    clearFilters,
+    filteredProcessos,
+    stats
+  } = useProcessoFilters(processos)
 
-  const handleSubmitForm = async (data: any) => {
-    if (modoEdicao && processoSelecionado) {
-      await editarProcesso(processoSelecionado.id, data)
+  const handleDelete = async (id: string) => {
+    const result = await deleteProcesso(id)
+    
+    if (result.success) {
+      toast.success("Processo excluído com sucesso!", {
+        duration: 2000,
+        position: "bottom-right"
+      })
+      
+      // Adicionar ao histórico (em produção seria feito no backend)
+      await addHistorico({
+        processoId: id,
+        acao: "exclusao",
+        usuario: "user@escritorio.com",
+        detalhes: "Processo excluído do sistema"
+      })
     } else {
-      await criarProcesso(data)
+      toast.error(result.error || "Erro ao excluir processo", {
+        duration: 3000,
+        position: "bottom-right"
+      })
     }
+    
+    return result
+  }
+
+  const handleUpdateAccess = async (id: string, access: string) => {
+    const result = await updateProcesso(id, { acesso: access as any })
+    
+    if (result.success) {
+      const accessLabel = access === "privado" ? "privado" : "público"
+      toast.success(`Processo alterado para ${accessLabel} com sucesso!`, {
+        duration: 2000,
+        position: "bottom-right"
+      })
+      
+      // Registrar no histórico
+      await addHistorico({
+        processoId: id,
+        acao: "alteracao_acesso",
+        usuario: "user@escritorio.com",
+        detalhes: `Nível de acesso alterado para ${accessLabel}`,
+        camposAlterados: [
+          {
+            campo: "acesso",
+            valorAnterior: access === "privado" ? "publico" : "privado",
+            valorNovo: access
+          }
+        ]
+      })
+    } else {
+      toast.error(result.error || "Erro ao alterar acesso", {
+        duration: 3000,
+        position: "bottom-right"
+      })
+    }
+    
+    return result
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Gestão de Processos</h1>
-        <p className="text-muted-foreground">
-          Cadastre, consulte e gerencie processos jurídicos do escritório com controle 
-          de acesso e rastreabilidade completa.
-        </p>
-      </div>
+    <div className="flex h-screen bg-background">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto lg:ml-64">
+        <div className="container py-6">
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Gestão de Processos
+              </h1>
+              <p className="text-muted-foreground">
+                Cadastre, consulte e gerencie processos jurídicos com controle de acesso e rastreabilidade completa
+              </p>
+            </div>
 
-      {/* Filtros e busca */}
-      <ProcessosFilters
-        filtros={filtros}
-        onFiltersChange={setFiltros}
-        onAddNew={() => abrirModal()}
-        totalProcessos={totalProcessos}
-        processosEncontrados={processos.length}
-      />
+            {/* Filtros */}
+            <ProcessoFilters
+              filters={filters}
+              onFilterChange={updateFilter}
+              onClearFilters={clearFilters}
+              stats={stats}
+            />
 
-      {/* Lista de processos */}
-      <ProcessosList
-        processos={processos}
-        onEdit={(processo) => abrirModal(processo)}
-        onDelete={excluirProcesso}
-        onViewHistory={abrirHistorico}
-        loading={loading}
-      />
-
-      {/* Modal de formulário */}
-      <Dialog open={modalAberto} onOpenChange={fecharModal}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
-          <ProcessoForm
-            processo={processoSelecionado || undefined}
-            onSubmit={handleSubmitForm}
-            onCancel={fecharModal}
-            loading={loading}
-            processos={processos}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal de histórico */}
-      <ProcessoHistoricoComponent
-        open={historicoAberto}
-        onClose={fecharHistorico}
-        processo={processoSelecionado}
-      />
+            {/* Tabela de Processos */}
+            <ProcessoTable
+              processos={filteredProcessos}
+              onDelete={handleDelete}
+              onUpdateAccess={handleUpdateAccess}
+            />
+          </div>
+        </div>
+      </main>
     </div>
   )
 }

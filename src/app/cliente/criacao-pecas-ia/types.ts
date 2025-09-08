@@ -1,132 +1,271 @@
 import { z } from "zod"
 
-// Tipos baseados EXATAMENTE nos campos especificados no PRD
+// Enums
+export const TipoFuncionalidadeEnum = z.enum([
+  "revisao_ortografica",
+  "pesquisa_jurisprudencia", 
+  "criacao_peca"
+])
 
-export type TipoFuncionalidade = "revisao_ortografica" | "pesquisa_jurisprudencia" | "criacao_peca_juridica"
+export const StatusPecaEnum = z.enum([
+  "em_processamento",
+  "concluida",
+  "erro",
+  "compartilhada"
+])
 
-export type TipoPecaJuridica = 
-  | "petição_inicial"
-  | "contestação"
-  | "recurso_apelação"
-  | "embargos_declaração"
-  | "agravo_instrumento"
-  | "mandado_segurança"
-  | "habeas_corpus"
-  | "ação_trabalhista"
-  | "defesa_trabalhista"
-  | "recurso_trabalhista"
+export const TipoPecaJuridicaEnum = z.enum([
+  "peticao_inicial",
+  "contestacao",
+  "recurso_apelacao",
+  "recurso_especial",
+  "recurso_extraordinario",
+  "agravo_instrumento",
+  "embargos_declaracao",
+  "habeas_corpus",
+  "mandado_seguranca",
+  "acao_cautelar",
+  "contrato_prestacao_servicos",
+  "contrato_locacao",
+  "procuracao",
+  "notificacao_extrajudicial",
+  "parecer_juridico"
+])
 
-export interface PecaDocumento {
-  id: string // ID da peça/documento - identificador único gerado automaticamente
-  tipo_funcionalidade: TipoFuncionalidade // Tipo de funcionalidade
-  lista_pecas_juridicas?: TipoPecaJuridica // Relação de tipos de peças disponíveis
-  prompt_preconfigurado: string // Texto inicial sugerido pelo sistema, editável
-  chat_peca_juridica: MensagemChat[] // Interface de conversa com IA, sem dados sensíveis
-  dados_cliente_integrado?: DadosClienteIntegrado // Dados do cliente para integração (não salvos no chat)
-  arquivo_exportado?: ArquivoExportado // Documento DOCX gerado com dados do cliente
-  arquivo_revisado?: ArquivoRevisado // Documento corrigido ortograficamente
-  resultado_pesquisa?: ResultadoPesquisa // Informações de jurisprudência retornadas
-  compartilhamento: Compartilhamento[] // Controle de compartilhamento
-  usuario_criador: string // Usuário responsável pela criação
-  tokens_utilizados: number // Quantidade de tokens consumidos
-  data_criacao: Date // Data e hora de criação
-}
+// Schemas de validação
+export const UploadArquivoSchema = z.object({
+  file: z.instanceof(File).refine(
+    (file) => file.size <= 10 * 1024 * 1024, // 10MB
+    "Arquivo deve ter no máximo 10MB"
+  ).refine(
+    (file) => ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(file.type),
+    "Apenas arquivos PDF ou DOCX são permitidos"
+  )
+})
 
-export interface MensagemChat {
+export const PromptSchema = z.object({
+  prompt: z.string().min(10, "Prompt deve ter no mínimo 10 caracteres").max(5000, "Prompt deve ter no máximo 5000 caracteres"),
+  tipoFuncionalidade: TipoFuncionalidadeEnum,
+  tipoPeca: TipoPecaJuridicaEnum.optional()
+})
+
+export const CompartilhamentoSchema = z.object({
+  pecaId: z.string(),
+  usuarioDestinoId: z.string(),
+  permissoes: z.object({
+    podeExportar: z.boolean().default(true),
+    podeIntegrarCliente: z.boolean().default(true)
+  })
+})
+
+export const IntegracaoClienteSchema = z.object({
+  pecaId: z.string(),
+  clienteId: z.string()
+})
+
+// Types
+export type TipoFuncionalidade = z.infer<typeof TipoFuncionalidadeEnum>
+export type StatusPeca = z.infer<typeof StatusPecaEnum>
+export type TipoPecaJuridica = z.infer<typeof TipoPecaJuridicaEnum>
+
+export interface PecaJuridica {
   id: string
-  tipo: "user" | "assistant"
+  tipo: TipoFuncionalidade
+  tipoPeca?: TipoPecaJuridica
+  titulo: string
   conteudo: string
-  timestamp: Date
-  tokens_consumidos?: number
-}
-
-export interface DadosClienteIntegrado {
-  id: string
-  nome: string
-  documento: string
-  endereco?: string
-  telefone?: string
-  email?: string
-  // Outros dados necessários para preenchimento da peça (sem dados sensíveis salvos no chat)
-}
-
-export interface ArquivoExportado {
-  nome: string
-  url: string
-  tipo: "docx"
-  data_geracao: Date
-}
-
-export interface ArquivoRevisado {
-  nome: string
-  url: string
-  tipo: "pdf" | "docx"
-  data_revisao: Date
-}
-
-export interface ResultadoPesquisa {
-  conteudo: string
-  fontes?: string[]
-  data_pesquisa: Date
+  promptUtilizado: string
+  status: StatusPeca
+  tokensUtilizados: number
+  usuarioCriadorId: string
+  usuarioCriadorNome: string
+  dataCriacao: Date
+  dataUltimaModificacao: Date
+  arquivoOriginal?: {
+    nome: string
+    tipo: string
+    tamanho: number
+  }
+  arquivoProcessado?: {
+    nome: string
+    url: string
+  }
+  compartilhamentos: Compartilhamento[]
 }
 
 export interface Compartilhamento {
   id: string
-  usuario_destinatario: string
-  data_compartilhamento: Date
-  pode_integrar_cliente: boolean
-  pode_exportar: boolean
+  usuarioDestinoId: string
+  usuarioDestinoNome: string
+  dataCompartilhamento: Date
+  permissoes: {
+    podeExportar: boolean
+    podeIntegrarCliente: boolean
+  }
 }
 
-export interface ControleTokens {
-  plano_atual: string
-  tokens_disponiveis: number
-  tokens_utilizados_mes: number
-  limite_mensal: number
-  data_renovacao: Date
+export interface Cliente {
+  id: string
+  nome: string
+  cpfCnpj: string
+  email: string
+  telefone: string
+  endereco: {
+    logradouro: string
+    numero: string
+    complemento?: string
+    bairro: string
+    cidade: string
+    estado: string
+    cep: string
+  }
 }
 
-// Schemas de validação ZOD
-export const PromptSchema = z.object({
-  conteudo: z.string().min(10, "Prompt deve ter pelo menos 10 caracteres"),
-  tipo_funcionalidade: z.enum(["revisao_ortografica", "pesquisa_jurisprudencia", "criacao_peca_juridica"]),
-  tipo_peca: z.enum([
-    "petição_inicial", "contestação", "recurso_apelação", "embargos_declaração",
-    "agravo_instrumento", "mandado_segurança", "habeas_corpus", "ação_trabalhista",
-    "defesa_trabalhista", "recurso_trabalhista"
-  ]).optional()
-})
-
-export const CompartilhamentoSchema = z.object({
-  usuario_destinatario: z.string().min(1, "Usuário destinatário é obrigatório"),
-  pode_integrar_cliente: z.boolean().default(true),
-  pode_exportar: z.boolean().default(true)
-})
-
-export const ArquivoUploadSchema = z.object({
-  arquivo: z.instanceof(File).refine(
-    (file) => file.type === "application/pdf" || 
-             file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "Apenas arquivos PDF ou DOCX são permitidos"
-  ).refine(
-    (file) => file.size <= 10 * 1024 * 1024, // 10MB
-    "Arquivo deve ter no máximo 10MB"
-  )
-})
-
-// Estados de loading específicos para cada operação
-export interface LoadingStates {
-  enviando_ia: boolean
-  integrando_cliente: boolean
-  exportando_arquivo: boolean
-  compartilhando: boolean
-  excluindo: boolean
-  carregando_historico: boolean
+export interface PlanoTokens {
+  planoId: string
+  planoNome: string
+  tokensTotal: number
+  tokensUtilizados: number
+  tokensRestantes: number
+  dataRenovacao: Date
 }
 
-export type PecaAction = 
-  | { type: "SET_LOADING"; payload: { key: keyof LoadingStates; value: boolean } }
-  | { type: "SET_PECA"; payload: PecaDocumento }
-  | { type: "ADD_MENSAGEM"; payload: MensagemChat }
-  | { type: "SET_TOKENS"; payload: ControleTokens }
-  | { type: "SET_ERROR"; payload: string | null }
+export interface ResultadoPesquisa {
+  id: string
+  titulo: string
+  tribunal: string
+  relator: string
+  dataJulgamento: Date
+  ementa: string
+  link?: string
+}
+
+// Prompts pré-configurados
+export const PROMPTS_PADRAO = {
+  revisao_ortografica: `Por favor, revise ortograficamente o documento jurídico anexado, corrigindo:
+- Erros de ortografia e gramática
+- Concordância verbal e nominal
+- Pontuação
+- Formatação de citações jurídicas
+- Padronização de termos técnicos
+
+Mantenha o conteúdo e estrutura originais, fazendo apenas correções ortográficas e gramaticais.`,
+
+  pesquisa_jurisprudencia: `Pesquise jurisprudências relevantes sobre o tema:
+[DESCREVA O TEMA OU QUESTÃO JURÍDICA]
+
+Por favor, forneça:
+- Tribunal e número do processo
+- Data do julgamento
+- Relator
+- Ementa
+- Principais argumentos utilizados
+- Link para o inteiro teor (se disponível)
+
+Priorize decisões dos tribunais superiores (STF, STJ) e dos últimos 5 anos.`,
+
+  peticao_inicial: `Crie uma petição inicial com base nas seguintes informações:
+
+PARTES:
+- Autor: [NOME DO AUTOR]
+- Réu: [NOME DO RÉU]
+
+FATOS:
+[DESCREVA OS FATOS RELEVANTES]
+
+FUNDAMENTOS JURÍDICOS:
+[INDIQUE AS BASES LEGAIS]
+
+PEDIDOS:
+[LISTE OS PEDIDOS]
+
+A petição deve seguir a estrutura formal: endereçamento, qualificação das partes, dos fatos, do direito, dos pedidos e requerimentos finais.`,
+
+  contestacao: `Elabore uma contestação com base nas seguintes informações:
+
+PROCESSO: [NÚMERO DO PROCESSO]
+AUTOR: [NOME DO AUTOR]
+RÉU: [NOME DO RÉU]
+
+PRELIMINARES (se houver):
+[DESCREVA AS PRELIMINARES]
+
+MÉRITO:
+[APRESENTE A DEFESA DE MÉRITO]
+
+A contestação deve impugnar especificamente os fatos narrados na inicial e apresentar a versão do réu.`,
+
+  recurso_apelacao: `Elabore um recurso de apelação considerando:
+
+SENTENÇA RECORRIDA:
+[RESUMO DA SENTENÇA]
+
+FUNDAMENTOS DO RECURSO:
+[RAZÕES PARA REFORMA DA SENTENÇA]
+
+O recurso deve demonstrar o erro da decisão e requerer sua reforma ou anulação.`
+}
+
+// Tipos de peças com descrições
+export const TIPOS_PECAS_INFO = {
+  peticao_inicial: {
+    label: "Petição Inicial",
+    descricao: "Peça que dá início ao processo judicial"
+  },
+  contestacao: {
+    label: "Contestação", 
+    descricao: "Resposta do réu à petição inicial"
+  },
+  recurso_apelacao: {
+    label: "Recurso de Apelação",
+    descricao: "Recurso contra sentença de primeiro grau"
+  },
+  recurso_especial: {
+    label: "Recurso Especial",
+    descricao: "Recurso ao STJ por violação de lei federal"
+  },
+  recurso_extraordinario: {
+    label: "Recurso Extraordinário",
+    descricao: "Recurso ao STF por questão constitucional"
+  },
+  agravo_instrumento: {
+    label: "Agravo de Instrumento",
+    descricao: "Recurso contra decisão interlocutória"
+  },
+  embargos_declaracao: {
+    label: "Embargos de Declaração",
+    descricao: "Recurso para esclarecer obscuridade, contradição ou omissão"
+  },
+  habeas_corpus: {
+    label: "Habeas Corpus",
+    descricao: "Remédio constitucional contra prisão ilegal"
+  },
+  mandado_seguranca: {
+    label: "Mandado de Segurança",
+    descricao: "Ação contra ato de autoridade"
+  },
+  acao_cautelar: {
+    label: "Ação Cautelar",
+    descricao: "Medida urgente para assegurar direito"
+  },
+  contrato_prestacao_servicos: {
+    label: "Contrato de Prestação de Serviços",
+    descricao: "Contrato de serviços advocatícios"
+  },
+  contrato_locacao: {
+    label: "Contrato de Locação",
+    descricao: "Contrato de locação de imóvel"
+  },
+  procuracao: {
+    label: "Procuração",
+    descricao: "Instrumento de mandato judicial"
+  },
+  notificacao_extrajudicial: {
+    label: "Notificação Extrajudicial",
+    descricao: "Comunicação formal extrajudicial"
+  },
+  parecer_juridico: {
+    label: "Parecer Jurídico",
+    descricao: "Opinião técnica sobre questão jurídica"
+  }
+}

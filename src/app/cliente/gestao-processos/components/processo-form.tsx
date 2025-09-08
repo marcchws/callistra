@@ -21,116 +21,93 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import { CalendarIcon, Loader2 } from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
-import { cn } from "@/lib/utils"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Loader2 } from "lucide-react"
 import { 
-  ProcessoFormData, 
-  ProcessoSchema, 
-  Processo,
-  QUALIFICACOES_OPTIONS,
-  INSTANCIAS_OPTIONS,
-  TRIBUNAIS_OPTIONS,
-  ACESSO_OPTIONS
+  Processo, 
+  ProcessoSchema,
+  QualificacaoEnum,
+  QualificacaoLabels,
+  InstanciaLabels,
+  NivelAcessoLabels,
+  TribunalLabels,
+  HonorariosLabels,
+  TribunalUrls
 } from "../types"
-import { gerarLinkTribunal, gerarSugestaPasta } from "../utils"
+import { useState, useEffect } from "react"
 
 interface ProcessoFormProps {
-  processo?: Processo
-  onSubmit: (data: ProcessoFormData) => Promise<void>
+  defaultValues?: Partial<Processo>
+  onSubmit: (data: Processo) => Promise<{ success: boolean; error?: string }>
   onCancel: () => void
-  loading?: boolean
-  processos?: Processo[]
+  isEditing?: boolean
 }
 
-export function ProcessoForm({ 
-  processo, 
-  onSubmit, 
-  onCancel, 
-  loading = false,
-  processos = []
-}: ProcessoFormProps) {
-  const isEdit = !!processo
-  
-  const form = useForm<ProcessoFormData>({
+export function ProcessoForm({ defaultValues, onSubmit, onCancel, isEditing = false }: ProcessoFormProps) {
+  const [loading, setLoading] = useState(false)
+
+  const form = useForm<Processo>({
     resolver: zodResolver(ProcessoSchema),
     defaultValues: {
-      pasta: processo?.pasta || gerarSugestaPasta(processos),
-      nomeCliente: processo?.nomeCliente || "",
-      qualificacaoCliente: processo?.qualificacaoCliente || "",
-      outrosEnvolvidos: processo?.outrosEnvolvidos || "",
-      qualificacaoEnvolvidos: processo?.qualificacaoEnvolvidos || "",
-      tituloProcesso: processo?.tituloProcesso || "",
-      instancia: processo?.instancia || "",
-      numero: processo?.numero || "",
-      juizo: processo?.juizo || "",
-      vara: processo?.vara || "",
-      foro: processo?.foro || "",
-      acao: processo?.acao || "",
-      tribunal: processo?.tribunal || "",
-      linkTribunal: processo?.linkTribunal || "",
-      objeto: processo?.objeto || "",
-      valorCausa: processo?.valorCausa || undefined,
-      distribuidoEm: processo?.distribuidoEm || undefined,
-      valorCondenacao: processo?.valorCondenacao || undefined,
-      observacoes: processo?.observacoes || "",
-      responsavel: processo?.responsavel || "",
-      honorarios: processo?.honorarios || [],
-      acesso: processo?.acesso || "publico"
+      pasta: "",
+      nomeCliente: "",
+      qualificacaoCliente: "autor",
+      outrosEnvolvidos: "",
+      qualificacaoOutros: "reu",
+      titulo: "",
+      instancia: "1_grau",
+      numero: "",
+      juizo: "",
+      vara: "",
+      foro: "",
+      acao: "",
+      tribunal: undefined,
+      linkTribunal: "",
+      objeto: "",
+      valorCausa: "",
+      distribuidoEm: "",
+      valorCondenacao: "",
+      observacoes: "",
+      responsavel: "",
+      honorarios: [],
+      acesso: "publico",
+      ...defaultValues
     }
   })
 
-  const handleSubmit = async (data: ProcessoFormData) => {
-    await onSubmit(data)
-  }
-
-  // Gerar link do tribunal automaticamente quando tribunal e número são preenchidos
+  // Auto-preencher link do tribunal quando tribunal for selecionado
   const watchTribunal = form.watch("tribunal")
-  const watchNumero = form.watch("numero")
   
-  if (watchTribunal && watchNumero && !form.getValues("linkTribunal")) {
-    const linkGerado = gerarLinkTribunal(watchTribunal, watchNumero)
-    if (linkGerado) {
-      form.setValue("linkTribunal", linkGerado)
+  useEffect(() => {
+    if (watchTribunal && TribunalUrls[watchTribunal]) {
+      form.setValue("linkTribunal", TribunalUrls[watchTribunal])
     }
+  }, [watchTribunal, form])
+
+  const handleSubmit = async (data: Processo) => {
+    setLoading(true)
+    const result = await onSubmit(data)
+    setLoading(false)
+    return result
   }
 
   return (
-    <Card className="max-w-4xl mx-auto">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-xl font-semibold">
-          {isEdit ? "Editar Processo" : "Novo Processo"}
-        </CardTitle>
-        <CardDescription>
-          {isEdit 
-            ? "Altere os dados do processo conforme necessário" 
-            : "Preencha os dados do novo processo. Campos marcados com * são obrigatórios"
-          }
-        </CardDescription>
-      </CardHeader>
-      
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        <Card className="max-w-4xl mx-auto">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xl font-semibold">
+              {isEditing ? "Editar Processo" : "Novo Processo"}
+            </CardTitle>
+          </CardHeader>
+          
           <CardContent className="space-y-6">
-            
             {/* Seção: Identificação */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">Identificação do Processo</h3>
+              <h3 className="text-lg font-medium">Identificação</h3>
+              <Separator />
               
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
@@ -138,12 +115,18 @@ export function ProcessoForm({
                   name="pasta"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Pasta</FormLabel>
+                      <FormLabel>
+                        Pasta <span className="text-red-500">*</span>
+                      </FormLabel>
                       <FormControl>
-                        <Input placeholder="Ex: 2024/001" {...field} />
+                        <Input 
+                          placeholder="Ex: 2024/001" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
                       </FormControl>
                       <FormDescription>
-                        Código interno da pasta do processo
+                        Identificador da pasta do processo
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -152,16 +135,17 @@ export function ProcessoForm({
 
                 <FormField
                   control={form.control}
-                  name="tituloProcesso"
+                  name="titulo"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Título do Processo</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ex: Ação de Cobrança" {...field} />
+                        <Input 
+                          placeholder="Ex: Ação Trabalhista" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
                       </FormControl>
-                      <FormDescription>
-                        Nome para identificação rápida
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -177,13 +161,11 @@ export function ProcessoForm({
                       <FormLabel>Número do Processo</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="0000000-00.0000.0.00.0000" 
-                          {...field} 
+                          placeholder="Padrão CNJ" 
+                          {...field}
+                          className="focus:ring-blue-500"
                         />
                       </FormControl>
-                      <FormDescription>
-                        Número CNJ do processo
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -197,14 +179,14 @@ export function ProcessoForm({
                       <FormLabel>Instância</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar instância" />
+                          <SelectTrigger className="focus:ring-blue-500">
+                            <SelectValue placeholder="Selecione" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {INSTANCIAS_OPTIONS.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                          {Object.entries(InstanciaLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -219,13 +201,14 @@ export function ProcessoForm({
                   name="acao"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Ação</FormLabel>
+                      <FormLabel>Tipo de Ação</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ex: Ação de Cobrança" {...field} />
+                        <Input 
+                          placeholder="Ex: Reclamação Trabalhista" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
                       </FormControl>
-                      <FormDescription>
-                        Tipo de ação judicial
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -233,9 +216,10 @@ export function ProcessoForm({
               </div>
             </div>
 
-            {/* Seção: Partes */}
+            {/* Seção: Partes Envolvidas */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">Partes Envolvidas</h3>
+              <h3 className="text-lg font-medium">Partes Envolvidas</h3>
+              <Separator />
               
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
@@ -243,11 +227,15 @@ export function ProcessoForm({
                   name="nomeCliente"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">
+                      <FormLabel>
                         Nome do Cliente <span className="text-red-500">*</span>
                       </FormLabel>
                       <FormControl>
-                        <Input placeholder="Nome completo do cliente" {...field} />
+                        <Input 
+                          placeholder="Nome completo" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -259,19 +247,19 @@ export function ProcessoForm({
                   name="qualificacaoCliente"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">
+                      <FormLabel>
                         Qualificação do Cliente <span className="text-red-500">*</span>
                       </FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar qualificação" />
+                          <SelectTrigger className="focus:ring-blue-500">
+                            <SelectValue placeholder="Selecione" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {QUALIFICACOES_OPTIONS.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                          {Object.entries(QualificacaoLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -288,11 +276,15 @@ export function ProcessoForm({
                   name="outrosEnvolvidos"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">
+                      <FormLabel>
                         Outros Envolvidos <span className="text-red-500">*</span>
                       </FormLabel>
                       <FormControl>
-                        <Input placeholder="Nomes das outras partes" {...field} />
+                        <Input 
+                          placeholder="Nomes das outras partes" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -301,22 +293,22 @@ export function ProcessoForm({
 
                 <FormField
                   control={form.control}
-                  name="qualificacaoEnvolvidos"
+                  name="qualificacaoOutros"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">
-                        Qualificação <span className="text-red-500">*</span>
+                      <FormLabel>
+                        Qualificação dos Outros <span className="text-red-500">*</span>
                       </FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar qualificação" />
+                          <SelectTrigger className="focus:ring-blue-500">
+                            <SelectValue placeholder="Selecione" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {QUALIFICACOES_OPTIONS.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                          {Object.entries(QualificacaoLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -328,10 +320,67 @@ export function ProcessoForm({
               </div>
             </div>
 
-            {/* Seção: Tribunal e Jurisdição */}
+            {/* Seção: Jurisdição */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">Tribunal e Jurisdição</h3>
+              <h3 className="text-lg font-medium">Jurisdição</h3>
+              <Separator />
               
+              <div className="grid gap-4 md:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="juizo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Juízo</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Nome do juízo" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="vara"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vara</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Ex: 1ª Vara Cível" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="foro"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Foro/Comarca</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Ex: Foro Central" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -341,14 +390,14 @@ export function ProcessoForm({
                       <FormLabel>Tribunal</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar tribunal" />
+                          <SelectTrigger className="focus:ring-blue-500">
+                            <SelectValue placeholder="Selecione o tribunal" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {TRIBUNAIS_OPTIONS.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                          {Object.entries(TribunalLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -366,58 +415,15 @@ export function ProcessoForm({
                       <FormLabel>Link do Tribunal</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="URL gerada automaticamente" 
-                          {...field} 
-                          readOnly
+                          placeholder="URL para consulta" 
+                          {...field}
+                          className="focus:ring-blue-500"
+                          readOnly={!!watchTribunal}
                         />
                       </FormControl>
                       <FormDescription>
-                        Gerado automaticamente baseado no tribunal
+                        {watchTribunal ? "Preenchido automaticamente" : "URL para consulta do processo"}
                       </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="juizo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Juízo</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: 1ª Vara Cível" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="vara"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vara</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: 1ª Vara Cível" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="foro"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Foro</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Foro Central" {...field} />
-                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -425,10 +431,29 @@ export function ProcessoForm({
               </div>
             </div>
 
-            {/* Seção: Valores e Datas */}
+            {/* Seção: Detalhes do Processo */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">Valores e Datas</h3>
+              <h3 className="text-lg font-medium">Detalhes do Processo</h3>
+              <Separator />
               
+              <FormField
+                control={form.control}
+                name="objeto"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Objeto</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Descrição detalhada do objeto do processo"
+                        className="min-h-[100px] focus:ring-blue-500"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <div className="grid gap-4 md:grid-cols-3">
                 <FormField
                   control={form.control}
@@ -438,11 +463,9 @@ export function ProcessoForm({
                       <FormLabel>Valor da Causa</FormLabel>
                       <FormControl>
                         <Input 
-                          type="number" 
-                          step="0.01"
-                          placeholder="0,00" 
+                          placeholder="R$ 0,00" 
                           {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                          className="focus:ring-blue-500"
                         />
                       </FormControl>
                       <FormMessage />
@@ -458,11 +481,9 @@ export function ProcessoForm({
                       <FormLabel>Valor da Condenação</FormLabel>
                       <FormControl>
                         <Input 
-                          type="number" 
-                          step="0.01"
-                          placeholder="0,00" 
+                          placeholder="R$ 0,00" 
                           {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                          className="focus:ring-blue-500"
                         />
                       </FormControl>
                       <FormMessage />
@@ -475,118 +496,19 @@ export function ProcessoForm({
                   name="distribuidoEm"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Distribuído em</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "dd/MM/yyyy", { locale: ptBR })
-                              ) : (
-                                <span>Selecionar data</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
-                            }
-                            initialFocus
-                            locale={ptBR}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* Seção: Responsabilidade e Acesso */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">Responsabilidade e Acesso</h3>
-              
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="responsavel"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">
-                        Responsável <span className="text-red-500">*</span>
-                      </FormLabel>
+                      <FormLabel>Data de Distribuição</FormLabel>
                       <FormControl>
-                        <Input placeholder="Nome do advogado responsável" {...field} />
+                        <Input 
+                          type="date"
+                          {...field}
+                          className="focus:ring-blue-500"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <FormField
-                  control={form.control}
-                  name="acesso"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nível de Acesso</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar nível" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {ACESSO_OPTIONS.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        Controla quem pode visualizar este processo
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
-            </div>
-
-            {/* Seção: Detalhes */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">Detalhes</h3>
-              
-              <FormField
-                control={form.control}
-                name="objeto"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Objeto do Processo</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Descrição detalhada do objeto do processo"
-                        className="min-h-[100px]"
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <FormField
                 control={form.control}
@@ -597,8 +519,8 @@ export function ProcessoForm({
                     <FormControl>
                       <Textarea 
                         placeholder="Anotações adicionais sobre o processo"
-                        className="min-h-[100px]"
-                        {...field} 
+                        className="min-h-[100px] focus:ring-blue-500"
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -607,8 +529,101 @@ export function ProcessoForm({
               />
             </div>
 
+            {/* Seção: Responsabilidade e Honorários */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Responsabilidade e Honorários</h3>
+              <Separator />
+              
+              <FormField
+                control={form.control}
+                name="responsavel"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Advogado Responsável <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Nome do advogado responsável" 
+                        {...field}
+                        className="focus:ring-blue-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="honorarios"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Honorários</FormLabel>
+                    <FormDescription>
+                      Selecione os tipos de honorários aplicáveis
+                    </FormDescription>
+                    <div className="space-y-2 mt-2">
+                      {Object.entries(HonorariosLabels).map(([value, label]) => (
+                        <div key={value} className="flex items-center space-x-2">
+                          <Checkbox
+                            checked={field.value?.includes(value as any)}
+                            onCheckedChange={(checked) => {
+                              const current = field.value || []
+                              if (checked) {
+                                field.onChange([...current, value])
+                              } else {
+                                field.onChange(current.filter((v) => v !== value))
+                              }
+                            }}
+                          />
+                          <label className="text-sm cursor-pointer">{label}</label>
+                        </div>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Seção: Controle de Acesso */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Controle de Acesso</h3>
+              <Separator />
+              
+              <FormField
+                control={form.control}
+                name="acesso"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Nível de Acesso <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="focus:ring-blue-500">
+                          <SelectValue placeholder="Selecione o nível de acesso" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Object.entries(NivelAcessoLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Público: Todos podem ver | Privado: Apenas responsável e admin | Envolvidos: Apenas partes do processo
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           </CardContent>
-          
+
           <CardFooter className="flex justify-end gap-3">
             <Button 
               type="button" 
@@ -624,11 +639,11 @@ export function ProcessoForm({
               disabled={loading}
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {loading ? "Salvando..." : (isEdit ? "Atualizar" : "Criar Processo")}
+              {loading ? "Salvando..." : (isEditing ? "Atualizar" : "Cadastrar")}
             </Button>
           </CardFooter>
-        </form>
-      </Form>
-    </Card>
+        </Card>
+      </form>
+    </Form>
   )
 }

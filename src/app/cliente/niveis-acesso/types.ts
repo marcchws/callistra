@@ -1,160 +1,168 @@
 import { z } from "zod"
 
-export interface PerfilAcesso {
+// Enum para tipos de permissão
+export enum PermissionType {
+  VISUALIZAR = "visualizar",
+  CRIAR = "criar",
+  EDITAR = "editar",
+  EXCLUIR = "excluir",
+  EDITAR_CONFIDENCIALIDADE = "editar_confidencialidade",
+  EXPORTAR = "exportar"
+}
+
+// Enum para status do perfil
+export enum ProfileStatus {
+  ATIVO = "ativo",
+  INATIVO = "inativo"
+}
+
+// Tipo para uma permissão individual
+export interface Permission {
+  type: PermissionType
+  label: string
+  enabled: boolean
+}
+
+// Tipo para permissões de uma tela
+export interface ScreenPermission {
+  screenId: string
+  screenName: string
+  module: string
+  permissions: Permission[]
+}
+
+// Tipo para um perfil de acesso
+export interface AccessProfile {
   id: string
-  nome: string
-  descricao?: string
-  status: "ativo" | "inativo"
-  permissoes: PermissaoTela[]
+  name: string
+  description?: string
+  status: ProfileStatus
+  screenPermissions: ScreenPermission[]
   createdAt: Date
   updatedAt: Date
-}
-
-export interface PermissaoTela {
-  telaId: string
-  telaNome: string
-  modulo: string
-  permissoes: {
-    visualizar: boolean
-    criar: boolean
-    editar: boolean
-    excluir: boolean
-    editarConfidencialidade: boolean
-    exportar: boolean
-  }
-}
-
-export interface TelaDisponivel {
-  id: string
-  nome: string
-  modulo: string
-  descricao?: string
-  permissoesDisponiveis: string[]
+  usersCount?: number // Quantidade de usuários usando este perfil
 }
 
 // Schema de validação para criação/edição de perfil
-export const perfilAcessoSchema = z.object({
-  nome: z.string()
+export const profileSchema = z.object({
+  name: z.string()
     .min(1, "Nome é obrigatório")
     .max(100, "Nome deve ter no máximo 100 caracteres")
-    .refine((name) => name.trim().length > 0, "Nome não pode ser apenas espaços"),
-  descricao: z.string()
+    .refine((val) => val.trim().length > 0, "Nome não pode ser vazio"),
+  description: z.string()
     .max(500, "Descrição deve ter no máximo 500 caracteres")
     .optional(),
-  status: z.enum(["ativo", "inativo"]).default("ativo"),
-  permissoes: z.array(z.object({
-    telaId: z.string().min(1, "ID da tela é obrigatório"),
-    telaNome: z.string().min(1, "Nome da tela é obrigatório"),
-    modulo: z.string().min(1, "Módulo é obrigatório"),
-    permissoes: z.object({
-      visualizar: z.boolean().default(false),
-      criar: z.boolean().default(false),
-      editar: z.boolean().default(false),
-      excluir: z.boolean().default(false),
-      editarConfidencialidade: z.boolean().default(false),
-      exportar: z.boolean().default(false)
-    })
-  })).default([])
+  status: z.nativeEnum(ProfileStatus).default(ProfileStatus.ATIVO),
+  screenPermissions: z.array(z.object({
+    screenId: z.string(),
+    screenName: z.string(),
+    module: z.string(),
+    permissions: z.array(z.object({
+      type: z.nativeEnum(PermissionType),
+      label: z.string(),
+      enabled: z.boolean()
+    }))
+  })).min(1, "Selecione pelo menos uma permissão")
 })
 
-export type PerfilAcessoForm = z.infer<typeof perfilAcessoSchema>
+export type ProfileFormData = z.infer<typeof profileSchema>
 
-// Dados mock das telas disponíveis no sistema
-export const telasDisponiveis: TelaDisponivel[] = [
-  // Sistema e Infraestrutura
+// Estrutura de módulos e telas do sistema
+export interface SystemModule {
+  id: string
+  name: string
+  screens: SystemScreen[]
+}
+
+export interface SystemScreen {
+  id: string
+  name: string
+  moduleId: string
+  availablePermissions: PermissionType[]
+}
+
+// Mapeamento de permissões para labels em português
+export const permissionLabels: Record<PermissionType, string> = {
+  [PermissionType.VISUALIZAR]: "Visualizar",
+  [PermissionType.CRIAR]: "Criar",
+  [PermissionType.EDITAR]: "Editar",
+  [PermissionType.EXCLUIR]: "Excluir",
+  [PermissionType.EDITAR_CONFIDENCIALIDADE]: "Editar Confidencialidade",
+  [PermissionType.EXPORTAR]: "Exportar"
+}
+
+// Status labels em português
+export const statusLabels: Record<ProfileStatus, string> = {
+  [ProfileStatus.ATIVO]: "Ativo",
+  [ProfileStatus.INATIVO]: "Inativo"
+}
+
+// Módulos e telas do sistema (baseado no sidebar-config)
+export const systemModules: SystemModule[] = [
   {
-    id: "sistema-alertas",
-    nome: "Alertas e Notificações",
-    modulo: "Sistema",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir"]
+    id: "sistema",
+    name: "Sistema e Infraestrutura",
+    screens: [
+      {
+        id: "alertas",
+        name: "Alertas e Notificações",
+        moduleId: "sistema",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.CRIAR, PermissionType.EDITAR, PermissionType.EXCLUIR]
+      },
+      {
+        id: "cobrancas",
+        name: "Cobranças em Atraso",
+        moduleId: "sistema",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.CRIAR, PermissionType.EDITAR, PermissionType.EXCLUIR, PermissionType.EXPORTAR]
+      }
+    ]
   },
   {
-    id: "sistema-cobrancas",
-    nome: "Cobranças em Atraso",
-    modulo: "Sistema", 
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "exportar"]
-  },
-  
-  // Escritório
-  {
-    id: "escritorio-usuarios",
-    nome: "Gerenciar Usuários",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "editarConfidencialidade"]
-  },
-  {
-    id: "escritorio-clientes",
-    nome: "Cadastro de Clientes", 
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "editarConfidencialidade", "exportar"]
-  },
-  {
-    id: "escritorio-processos",
-    nome: "Gestão de Processos",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "editarConfidencialidade", "exportar"]
-  },
-  {
-    id: "escritorio-especialidades",
-    nome: "Cadastro de Especialidades",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir"]
-  },
-  {
-    id: "escritorio-agenda",
-    nome: "Agenda",
-    modulo: "Escritório", 
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "exportar"]
-  },
-  {
-    id: "escritorio-contratos",
-    nome: "Contratos e Procurações",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "editarConfidencialidade", "exportar"]
-  },
-  {
-    id: "escritorio-tarefas",
-    nome: "Tarefas",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "exportar"]
-  },
-  {
-    id: "escritorio-chat",
-    nome: "Chat Interno",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir"]
-  },
-  {
-    id: "escritorio-helpdesk",
-    nome: "Helpdesk",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "exportar"]
-  },
-  {
-    id: "escritorio-financeiro",
-    nome: "Receitas e Despesas",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir", "editarConfidencialidade", "exportar"]
-  },
-  {
-    id: "escritorio-balancete",
-    nome: "Balancete",
-    modulo: "Escritório",
-    permissoesDisponiveis: ["visualizar", "exportar"]
-  },
-  {
-    id: "escritorio-niveis-acesso",
-    nome: "Níveis de Acesso",
-    modulo: "Escritório", 
-    permissoesDisponiveis: ["visualizar", "criar", "editar", "excluir"]
+    id: "escritorio",
+    name: "Escritório",
+    screens: [
+      {
+        id: "clientes",
+        name: "Cadastro de Clientes",
+        moduleId: "escritorio",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.CRIAR, PermissionType.EDITAR, PermissionType.EXCLUIR, PermissionType.EDITAR_CONFIDENCIALIDADE, PermissionType.EXPORTAR]
+      },
+      {
+        id: "processos",
+        name: "Gestão de Processos",
+        moduleId: "escritorio",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.CRIAR, PermissionType.EDITAR, PermissionType.EXCLUIR, PermissionType.EDITAR_CONFIDENCIALIDADE]
+      },
+      {
+        id: "contratos",
+        name: "Contratos e Procurações",
+        moduleId: "escritorio",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.CRIAR, PermissionType.EDITAR, PermissionType.EXCLUIR, PermissionType.EXPORTAR]
+      },
+      {
+        id: "agenda",
+        name: "Agenda",
+        moduleId: "escritorio",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.CRIAR, PermissionType.EDITAR, PermissionType.EXCLUIR]
+      },
+      {
+        id: "tarefas",
+        name: "Tarefas",
+        moduleId: "escritorio",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.CRIAR, PermissionType.EDITAR, PermissionType.EXCLUIR]
+      },
+      {
+        id: "receitas-despesas",
+        name: "Receitas e Despesas",
+        moduleId: "escritorio",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.CRIAR, PermissionType.EDITAR, PermissionType.EXCLUIR, PermissionType.EXPORTAR]
+      },
+      {
+        id: "balancete",
+        name: "Balancete",
+        moduleId: "escritorio",
+        availablePermissions: [PermissionType.VISUALIZAR, PermissionType.EXPORTAR]
+      }
+    ]
   }
 ]
-
-export const permissaoLabels = {
-  visualizar: "Visualizar",
-  criar: "Criar", 
-  editar: "Editar",
-  excluir: "Excluir",
-  editarConfidencialidade: "Editar Confidencialidade",
-  exportar: "Exportar"
-}

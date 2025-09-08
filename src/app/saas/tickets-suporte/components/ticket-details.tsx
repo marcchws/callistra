@@ -1,22 +1,25 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { 
   ArrowLeft, 
   Mail, 
   Calendar, 
   Clock, 
-  User, 
   Paperclip,
   Send,
   Download,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  X,
+  FileText,
+  Image as ImageIcon,
+  File
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -38,8 +41,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Ticket, TicketStatus, STATUS_CONFIG, formatTimeAgo, getInitials, Attendant } from "../types"
+
+import { Ticket, TicketStatus, STATUS_CONFIG, formatTimeAgo, getInitials, Attendant, TicketAttachment } from "../types"
 import { TicketHistory } from "./ticket-history"
 
 interface TicketDetailsProps {
@@ -51,7 +54,7 @@ interface TicketDetailsProps {
   }
   onChangeStatus: (status: TicketStatus) => void
   onChangeResponsible: (responsible: string) => void
-  onAddInteraction: (message: string, attachments?: any[]) => void
+  onAddInteraction: (message: string, attachments?: TicketAttachment[]) => void
   onAssumeTicket: () => void
 }
 
@@ -69,22 +72,66 @@ export function TicketDetails({
   const [showChangeResponsible, setShowChangeResponsible] = useState(false)
   const [selectedResponsible, setSelectedResponsible] = useState(ticket.responsavel || "")
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const statusConfig = STATUS_CONFIG[ticket.status]
   const isResponsible = ticket.responsavel === currentUser.name
   const canChangeResponsible = currentUser.accessLevel === 'total'
   const canAssume = !ticket.responsavel
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    setSelectedFiles(prev => [...prev, ...files])
+    // Limpar o input para permitir selecionar o mesmo arquivo novamente
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const getFileIcon = (file: File) => {
+    if (file.type.startsWith('image/')) {
+      return <ImageIcon className="h-4 w-4" />
+    }
+    if (file.type.includes('text') || file.type.includes('document')) {
+      return <FileText className="h-4 w-4" />
+    }
+    return <File className="h-4 w-4" />
+  }
+
   const handleSendMessage = async () => {
-    if (!message.trim()) return
+    if (!message.trim() && selectedFiles.length === 0) return
 
     setSendingMessage(true)
     
     // Simular delay de envio
     await new Promise(resolve => setTimeout(resolve, 500))
     
-    onAddInteraction(message)
+    // Converter File[] para TicketAttachment[]
+    const attachments: TicketAttachment[] = selectedFiles.map((file, index) => ({
+      id: `temp-${Date.now()}-${index}`,
+      name: file.name,
+      url: URL.createObjectURL(file), // URL temporária para preview
+      size: file.size,
+      uploadedAt: new Date(),
+      uploadedBy: currentUser.name
+    }))
+    
+    onAddInteraction(message, attachments)
     setMessage("")
+    setSelectedFiles([])
     setSendingMessage(false)
   }
 
@@ -297,15 +344,68 @@ export function TicketDetails({
                       className="min-h-[120px] resize-none focus:ring-blue-500"
                     />
                     
+                    {/* File Preview */}
+                    {selectedFiles.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-muted-foreground">Arquivos selecionados:</p>
+                        <div className="space-y-2">
+                          {selectedFiles.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border">
+                              <div className="flex items-center gap-2">
+                                {getFileIcon(file)}
+                                <div>
+                                  <p className="text-sm font-medium">{file.name}</p>
+                                  <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveFile(index)}
+                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center">
-                      <Button variant="outline" size="sm" className="gap-2">
-                        <Paperclip className="h-4 w-4" />
-                        Anexar arquivo
-                      </Button>
+                      <div className="flex gap-2">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          onChange={handleFileSelect}
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.zip,.rar"
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="gap-2"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Paperclip className="h-4 w-4" />
+                          Anexar arquivo
+                        </Button>
+                        {selectedFiles.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedFiles([])}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            Limpar arquivos
+                          </Button>
+                        )}
+                      </div>
                       
                       <Button
                         onClick={handleSendMessage}
-                        disabled={!message.trim() || sendingMessage}
+                        disabled={(!message.trim() && selectedFiles.length === 0) || sendingMessage}
                         className="bg-blue-600 hover:bg-blue-700 gap-2"
                       >
                         {sendingMessage ? (

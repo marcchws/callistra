@@ -23,7 +23,11 @@ import { LucideIcon,
   Edit,
   LogIn,
   KeyRound,
-  Bot
+  Bot,
+  Upload,
+  Brain,
+  MonitorSpeaker,
+  PlayCircle
 } from "lucide-react"
 
 export interface SidebarItem {
@@ -35,6 +39,43 @@ export interface SidebarItem {
 }
 
 export const sidebarConfig: SidebarItem[] = [
+  // DEMOS COMERCIAIS
+  {
+    title: "🎭 Demo: IA Recursos OAB",
+    href: "/demo-oab-recurso",
+    icon: PlayCircle,
+    module: "demo",
+    description: "Demo baseada na reunião João Paula & Pedro (Pivot) - 29/08/2025"
+  },
+  {
+    title: "📤 Upload de Prova",
+    href: "/demo-oab-recurso/upload",
+    icon: Upload,
+    module: "demo",
+    description: "Upload e processamento OCR da prova manuscrita"
+  },
+  {
+    title: "🧠 Análise Prévia IA",
+    href: "/demo-oab-recurso/analise",
+    icon: Brain,
+    module: "demo",
+    description: "Análise de viabilidade do recurso por IA (R$ 50)"
+  },
+  {
+    title: "📄 Recurso Gerado",
+    href: "/demo-oab-recurso/recurso",
+    icon: FileText,
+    module: "demo",
+    description: "Recurso administrativo gerado automaticamente"
+  },
+  {
+    title: "📊 Painel Administrativo",
+    href: "/demo-oab-recurso/admin",
+    icon: MonitorSpeaker,
+    module: "demo",
+    description: "Dashboard gerencial da operação Pivot (Holanda)"
+  },
+
   // Sistema e Infraestrutura
   {
     title: "Login: Autenticação",
@@ -182,7 +223,7 @@ export const sidebarConfig: SidebarItem[] = [
   },
   {
     title: "Agenda",
-    href: "/escritorio/agenda",
+    href: "/cliente/agenda",
     icon: Calendar,
     module: "escritorio",
     description: "Agendamento, visualização e gerenciamento de compromissos, reuniões, tarefas e bloqueios com eventos recorrentes, notificações, anexos e integração com clientes e processos"
@@ -246,6 +287,7 @@ export const sidebarConfig: SidebarItem[] = [
 ]
 
 export const moduleLabels = {
+  demo: "Demos Comerciais",
   sistema: "Sistema e Infraestrutura",
   saas: "Callistra SaaS",
   escritorio: "Escritório"

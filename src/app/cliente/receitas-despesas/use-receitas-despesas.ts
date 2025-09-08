@@ -49,13 +49,13 @@ export function useReceitasDespesas() {
           categoria: "Honorários Advocatícios",
           subcategoria: "Sucesso",
           valor: 5000,
-          dataVencimento: new Date("2024-12-15"),
+          dataVencimento: new Date("2025-09-15"),
           status: "pendente",
-          processo: "PROC-2024-001",
+          processo: "PROC-2025-001",
           beneficiario: "Cliente A",
           observacoes: "Honorários de sucesso - processo trabalhista",
           criadoPor: "Admin",
-          criadoEm: new Date("2024-11-01")
+          criadoEm: new Date("2025-08-01")
         },
         {
           id: "2",
@@ -63,13 +63,13 @@ export function useReceitasDespesas() {
           categoria: "Taxas e Custas Judiciais",
           subcategoria: "Custas Processuais",
           valor: 150,
-          dataVencimento: new Date("2024-11-30"),
-          dataPagamento: new Date("2024-11-28"),
+          dataVencimento: new Date("2025-08-30"),
+          dataPagamento: new Date("2025-08-28"),
           status: "historico",
-          processo: "PROC-2024-001",
+          processo: "PROC-2025-001",
           beneficiario: "Tribunal de Justiça",
           criadoPor: "Admin",
-          criadoEm: new Date("2024-11-01")
+          criadoEm: new Date("2025-08-01")
         }
       ]
       

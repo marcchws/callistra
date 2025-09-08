@@ -1,17 +1,31 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { MoreVertical, Users, Link2, X, Shield, Clock } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import {
+  MoreVertical,
+  Phone,
+  Video,
+  Info,
+  Archive,
+  Trash2,
+  Download,
+  Copy,
+  ExternalLink
+} from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu"
 import {
   AlertDialog,
@@ -21,240 +35,384 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { Chat, ChatMessage, MessageFormData } from "../types"
+import type { Chat, Message } from "../types"
 import { MessageItem } from "./message-item"
 import { MessageInput } from "./message-input"
-import { toast } from "sonner"
 
 interface ChatWindowProps {
-  chat: Chat | null
-  messages: ChatMessage[]
-  onSendMessage: (message: MessageFormData, file?: File) => Promise<void>
-  onCloseChat: (chatId: string) => Promise<void>
-  isConnected: boolean
+  chat: Chat
+  messages: Message[]
   loading: boolean
+  isRecording: boolean
+  typingUsers: Record<string, boolean>
+  onSendMessage: (content: string) => void
+  onSendAudio: (audioBlob: Blob) => void
+  onSendAttachment: (file: File) => void
+  onCloseChat: (chatId: string) => void
+  onTyping: (isTyping: boolean) => void
+  setIsRecording: (isRecording: boolean) => void
 }
 
-export function ChatWindow({ 
-  chat, 
-  messages, 
-  onSendMessage, 
+export function ChatWindow({
+  chat,
+  messages,
+  loading,
+  isRecording,
+  typingUsers,
+  onSendMessage,
+  onSendAudio,
+  onSendAttachment,
   onCloseChat,
-  isConnected,
-  loading 
+  onTyping,
+  setIsRecording
 }: ChatWindowProps) {
-  const [showCloseDialog, setShowCloseDialog] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const [showChatInfo, setShowChatInfo] = useState(false)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
 
-  // Auto scroll to bottom when new messages arrive
+  // Auto scroll para última mensagem
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  if (!chat) {
-    return (
-      <Card className="flex-1 h-full flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="mx-auto h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-            <Users className="h-6 w-6 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-gray-900">
-              Selecione uma conversa
-            </h3>
-            <p className="text-sm text-gray-600">
-              Escolha uma conversa da lista para começar a enviar mensagens
-            </p>
-          </div>
-        </div>
-      </Card>
-    )
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
   }
 
-  const otherParticipants = chat.participants.filter(p => p.id !== "user1")
-  const displayName = otherParticipants.map(p => p.name).join(", ")
+  const getChatName = () => {
+    const otherParticipant = chat.participants.find(p => p.id !== "user1")
+    return otherParticipant?.name || "Chat"
+  }
+
+  const getChatAvatar = () => {
+    const otherParticipant = chat.participants.find(p => p.id !== "user1")
+    return otherParticipant?.avatar
+  }
+
+  const otherParticipant = chat.participants.find(p => p.id !== "user1")
+  const isTyping = Object.values(typingUsers).some(typing => typing)
 
   const handleCopyLink = () => {
     if (chat.secureLink) {
       navigator.clipboard.writeText(chat.secureLink)
-      toast.success("Link copiado para a área de transferência", { duration: 2000 })
+      toast.success("Link copiado para a área de transferência")
     }
   }
 
-  const handleCloseChat = async () => {
-    try {
-      await onCloseChat(chat.id)
-      setShowCloseDialog(false)
-    } catch (error) {
-      // Error handling done in hook
+  const handleShareWhatsApp = () => {
+    if (chat.secureLink) {
+      const message = `Olá! Acesse nosso chat através do link: ${chat.secureLink}`
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`
+      window.open(whatsappUrl, "_blank")
     }
   }
 
-  const groupMessages = (messages: ChatMessage[]) => {
-    const grouped: (ChatMessage & { showAvatar?: boolean })[] = []
-    
-    for (let i = 0; i < messages.length; i++) {
-      const message = messages[i]
-      const prevMessage = messages[i - 1]
-      const nextMessage = messages[i + 1]
-      
-      // Show avatar if it's the first message from this sender or sender changes
-      const showAvatar = !prevMessage || prevMessage.senderId !== message.senderId
-      
-      grouped.push({
-        ...message,
-        showAvatar
-      })
+  const handleShareEmail = () => {
+    if (chat.secureLink && chat.clientEmail) {
+      const subject = "Link de acesso ao chat - Callistra"
+      const body = `Olá!\n\nVocê pode acessar nosso chat através do seguinte link:\n${chat.secureLink}\n\nPara acessar, você precisará informar seu e-mail e os 5 primeiros dígitos do seu documento.\n\nAtenciosamente,\nEquipe Callistra`
+      const mailtoUrl = `mailto:${chat.clientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+      window.open(mailtoUrl)
     }
-    
-    return grouped
   }
 
-  const groupedMessages = groupMessages(messages)
+  const handleCloseChat = () => {
+    setShowCloseDialog(false)
+    onCloseChat(chat.id)
+  }
+
+  // Agrupar mensagens por data
+  const messagesByDate = messages.reduce((acc, message) => {
+    const date = format(new Date(message.timestamp), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+    if (!acc[date]) {
+      acc[date] = []
+    }
+    acc[date].push(message)
+    return acc
+  }, {} as Record<string, Message[]>)
 
   return (
-    <Card className="flex-1 h-full flex flex-col">
+    <div className="flex h-full flex-col bg-white">
       {/* Header */}
-      <div className="p-4 border-b bg-white rounded-t-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-              {chat.type === 'external' ? (
-                <Users className="h-5 w-5 text-blue-600" />
-              ) : (
-                <span className="text-sm font-medium text-blue-600">
-                  {displayName.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </div>
-            
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                {displayName}
-              </h2>
-              <div className="flex items-center gap-2">
-                <Badge variant={chat.type === 'external' ? 'default' : 'secondary'}>
-                  {chat.type === 'external' ? 'Cliente Externo' : 'Conversa Interna'}
-                </Badge>
-                
-                {!chat.isActive && (
-                  <Badge variant="secondary" className="text-xs">
-                    <Clock className="h-3 w-3 mr-1" />
-                    Histórico
-                  </Badge>
-                )}
-                
-                <div className={cn(
-                  "h-2 w-2 rounded-full",
-                  isConnected ? "bg-green-500" : "bg-gray-400"
-                )} />
-                <span className="text-xs text-gray-600">
-                  {isConnected ? "Online" : "Desconectado"}
-                </span>
-              </div>
-            </div>
+      <div className="flex items-center justify-between border-b p-4">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={getChatAvatar()} />
+              <AvatarFallback className="bg-blue-100 text-blue-600">
+                {getInitials(getChatName())}
+              </AvatarFallback>
+            </Avatar>
+            {otherParticipant?.isOnline && (
+              <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-green-500" />
+            )}
           </div>
 
-          {/* Actions Menu */}
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold">{getChatName()}</h3>
+              {chat.type === "external" && (
+                <Badge variant="secondary" className="text-xs">
+                  Cliente Externo
+                </Badge>
+              )}
+              {chat.status === "closed" && (
+                <Badge variant="outline" className="text-xs">
+                  Encerrado
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {otherParticipant?.isOnline 
+                ? "Online" 
+                : otherParticipant?.lastSeen
+                  ? `Visto por último ${format(new Date(otherParticipant.lastSeen), "HH:mm", { locale: ptBR })}`
+                  : "Offline"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {chat.type === "external" && chat.secureLink && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Compartilhar Link
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Compartilhar link seguro</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleCopyLink}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copiar link
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleShareWhatsApp}>
+                  <Phone className="h-4 w-4 mr-2" />
+                  Enviar via WhatsApp
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleShareEmail}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Enviar por e-mail
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Button variant="ghost" size="icon">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {chat.type === 'external' && chat.secureLink && (
-                <>
-                  <DropdownMenuItem onClick={handleCopyLink}>
-                    <Link2 className="mr-2 h-4 w-4" />
-                    Copiar Link Seguro
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              
-              {chat.isActive && (
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Opções</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setShowChatInfo(true)}>
+                <Info className="h-4 w-4 mr-2" />
+                Informações do chat
+              </DropdownMenuItem>
+              {chat.status === "active" && (
                 <DropdownMenuItem 
+                  className="text-destructive"
                   onClick={() => setShowCloseDialog(true)}
-                  className="text-red-600 hover:text-red-700"
                 >
-                  <X className="mr-2 h-4 w-4" />
-                  Encerrar Chat
+                  <Archive className="h-4 w-4 mr-2" />
+                  Encerrar chat
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-
-        {/* External Chat Info */}
-        {chat.type === 'external' && (
-          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <Shield className="h-4 w-4 text-blue-600 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium text-blue-900">Chat Seguro com Cliente</p>
-                <p className="text-blue-700">
-                  Cliente autenticado com: {chat.clientEmail} • 
-                  Documento: *****{chat.clientDocumentDigits?.slice(-2)}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <p className="text-gray-600">Carregando mensagens...</p>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="text-center">
-              <p className="text-gray-600 mb-2">Nenhuma mensagem ainda</p>
-              <p className="text-sm text-gray-500">
-                Seja o primeiro a enviar uma mensagem!
-              </p>
+      {/* Messages */}
+      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <div className="space-y-4">
+          {Object.entries(messagesByDate).map(([date, dateMessages]) => (
+            <div key={date}>
+              {/* Date Separator */}
+              <div className="flex items-center gap-4 my-4">
+                <Separator className="flex-1" />
+                <span className="text-xs text-muted-foreground font-medium px-2 bg-white">
+                  {date}
+                </span>
+                <Separator className="flex-1" />
+              </div>
+
+              {/* Messages for this date */}
+              <div className="space-y-2">
+                {dateMessages.map((message) => (
+                  <MessageItem
+                    key={message.id}
+                    message={message}
+                    isMe={message.senderId === "user1"}
+                    showAvatar={chat.type === "internal"}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {groupedMessages.map((message) => (
-              <MessageItem
-                key={message.id}
-                message={message}
-                isOwn={message.senderId === "user1"}
-                showAvatar={message.showAvatar}
-              />
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+          ))}
+
+          {/* Typing Indicator */}
+          {isTyping && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex gap-1">
+                <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" 
+                      style={{ animationDelay: "0ms" }} />
+                <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" 
+                      style={{ animationDelay: "150ms" }} />
+                <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" 
+                      style={{ animationDelay: "300ms" }} />
+              </div>
+              <span>{otherParticipant?.name} está digitando...</span>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
       </ScrollArea>
 
       {/* Message Input */}
-      {chat.isActive && (
+      {chat.status === "active" && (
         <MessageInput
           onSendMessage={onSendMessage}
-          disabled={!isConnected || loading}
+          onSendAudio={onSendAudio}
+          onSendAttachment={onSendAttachment}
+          onTyping={onTyping}
+          isRecording={isRecording}
+          setIsRecording={setIsRecording}
         />
       )}
 
-      {/* Close Chat Confirmation Dialog */}
+      {/* Closed Chat Message */}
+      {chat.status === "closed" && (
+        <div className="border-t p-4 bg-gray-50">
+          <p className="text-center text-sm text-muted-foreground">
+            Este chat foi encerrado e não aceita novas mensagens.
+          </p>
+        </div>
+      )}
+
+      {/* Chat Info Dialog */}
+      <Dialog open={showChatInfo} onOpenChange={setShowChatInfo}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Informações do Chat</DialogTitle>
+            <DialogDescription>
+              Detalhes sobre esta conversa
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-semibold mb-2">Participantes</h4>
+              <div className="space-y-2">
+                {chat.participants.map((participant) => (
+                  <div key={participant.id} className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={participant.avatar} />
+                      <AvatarFallback className="bg-blue-100 text-blue-600 text-xs">
+                        {getInitials(participant.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-medium">{participant.name}</p>
+                      <p className="text-xs text-muted-foreground">{participant.email}</p>
+                    </div>
+                    {participant.isOnline && (
+                      <Badge variant="secondary" className="text-xs">Online</Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <Separator />
+            
+            <div>
+              <h4 className="font-semibold mb-2">Informações Gerais</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tipo:</span>
+                  <span>{chat.type === "internal" ? "Interno" : "Externo"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Status:</span>
+                  <span>{chat.status === "active" ? "Ativo" : "Encerrado"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Criado em:</span>
+                  <span>{format(new Date(chat.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Última atualização:</span>
+                  <span>{format(new Date(chat.updatedAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total de mensagens:</span>
+                  <span>{messages.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {chat.type === "external" && chat.secureLink && (
+              <>
+                <Separator />
+                <div>
+                  <h4 className="font-semibold mb-2">Link Seguro</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">E-mail do cliente:</span>
+                      <span>{chat.clientEmail}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Dígitos do documento:</span>
+                      <span>{chat.clientDocumentDigits}</span>
+                    </div>
+                    <div className="mt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleCopyLink}
+                        className="w-full"
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copiar Link Seguro
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close Chat Dialog */}
       <AlertDialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Encerrar Conversa</AlertDialogTitle>
+            <AlertDialogTitle>Encerrar chat?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja encerrar esta conversa? Ela será movida para o histórico
-              e não será possível enviar novas mensagens.
+              Esta ação não pode ser desfeita. O chat será movido para o histórico e não será possível enviar novas mensagens.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -263,11 +421,11 @@ export function ChatWindow({
               onClick={handleCloseChat}
               className="bg-red-600 hover:bg-red-700"
             >
-              Encerrar Chat
+              Encerrar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </div>
   )
 }

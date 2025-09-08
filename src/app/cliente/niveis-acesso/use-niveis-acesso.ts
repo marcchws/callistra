@@ -1,328 +1,392 @@
-import { useState, useEffect } from "react"
-import { PerfilAcesso, PerfilAcessoForm, telasDisponiveis } from "./types"
-import { toast } from "sonner"
+"use client"
 
-// Mock data para desenvolvimento
-const mockPerfis: PerfilAcesso[] = [
+import { useState, useCallback, useEffect } from "react"
+import { toast } from "sonner"
+import { 
+  AccessProfile, 
+  ProfileFormData, 
+  ProfileStatus,
+  systemModules,
+  ScreenPermission,
+  PermissionType,
+  permissionLabels
+} from "./types"
+
+// Mock de dados inicial com perfis que podem ser testados
+// 
+// CENÁRIOS DE TESTE PARA EXCLUSÃO:
+// 1. "Perfil Teste Inativo" (ID: 4) - Inativo, 0 usuários → Pode excluir diretamente
+// 2. "Perfil Vazio" (ID: 5) - Ativo, 0 usuários → Desativar primeiro, depois excluir
+// 3. "Administrador", "Financeiro", "Advogado Associado" - Ativos com usuários → Desativar primeiro
+//
+const mockProfiles: AccessProfile[] = [
   {
     id: "1",
-    nome: "Administrador",
-    descricao: "Acesso total ao sistema",
-    status: "ativo",
-    permissoes: telasDisponiveis.map(tela => ({
-      telaId: tela.id,
-      telaNome: tela.nome,
-      modulo: tela.modulo,
-      permissoes: {
-        visualizar: true,
-        criar: true,
-        editar: true,
-        excluir: true,
-        editarConfidencialidade: true,
-        exportar: true
-      }
-    })),
+    name: "Administrador",
+    description: "Perfil com acesso total ao sistema",
+    status: ProfileStatus.ATIVO,
+    screenPermissions: systemModules.flatMap(module => 
+      module.screens.map(screen => ({
+        screenId: screen.id,
+        screenName: screen.name,
+        module: module.name,
+        permissions: screen.availablePermissions.map(type => ({
+          type,
+          label: permissionLabels[type],
+          enabled: true
+        }))
+      }))
+    ),
     createdAt: new Date("2024-01-01"),
-    updatedAt: new Date("2024-01-01")
+    updatedAt: new Date("2024-01-01"),
+    usersCount: 5
   },
   {
-    id: "2", 
-    nome: "Advogado Associado",
-    descricao: "Acesso limitado para advogados parceiros",
-    status: "ativo",
-    permissoes: [
-      {
-        telaId: "escritorio-processos",
-        telaNome: "Gestão de Processos",
-        modulo: "Escritório",
-        permissoes: {
-          visualizar: true,
-          criar: true,
-          editar: true,
-          excluir: false,
-          editarConfidencialidade: false,
-          exportar: true
-        }
-      },
-      {
-        telaId: "escritorio-clientes",
-        telaNome: "Cadastro de Clientes",
-        modulo: "Escritório", 
-        permissoes: {
-          visualizar: true,
-          criar: false,
-          editar: true,
-          excluir: false,
-          editarConfidencialidade: false,
-          exportar: false
-        }
-      }
-    ],
+    id: "2",
+    name: "Financeiro",
+    description: "Perfil para equipe financeira",
+    status: ProfileStatus.ATIVO,
+    screenPermissions: systemModules.flatMap(module => 
+      module.screens
+        .filter(screen => ["cobrancas", "receitas-despesas", "balancete"].includes(screen.id))
+        .map(screen => ({
+          screenId: screen.id,
+          screenName: screen.name,
+          module: module.name,
+          permissions: screen.availablePermissions.map(type => ({
+            type,
+            label: permissionLabels[type],
+            enabled: true
+          }))
+        }))
+    ),
     createdAt: new Date("2024-01-15"),
-    updatedAt: new Date("2024-01-15")
+    updatedAt: new Date("2024-01-15"),
+    usersCount: 3
   },
   {
     id: "3",
-    nome: "Financeiro",
-    descricao: "Perfil para setor financeiro",
-    status: "inativo",
-    permissoes: [
-      {
-        telaId: "escritorio-financeiro",
-        telaNome: "Receitas e Despesas",
-        modulo: "Escritório",
-        permissoes: {
-          visualizar: true,
-          criar: true,
-          editar: true,
-          excluir: true,
-          editarConfidencialidade: true,
-          exportar: true
-        }
-      }
-    ],
+    name: "Advogado Associado",
+    description: "Perfil para advogados parceiros",
+    status: ProfileStatus.ATIVO,
+    screenPermissions: systemModules.flatMap(module => 
+      module.screens
+        .filter(screen => ["clientes", "processos", "agenda", "tarefas"].includes(screen.id))
+        .map(screen => ({
+          screenId: screen.id,
+          screenName: screen.name,
+          module: module.name,
+          permissions: screen.availablePermissions.map(type => ({
+            type,
+            label: permissionLabels[type],
+            enabled: type === PermissionType.VISUALIZAR || type === PermissionType.CRIAR || type === PermissionType.EDITAR
+          }))
+        }))
+    ),
     createdAt: new Date("2024-02-01"),
-    updatedAt: new Date("2024-02-10")
+    updatedAt: new Date("2024-02-01"),
+    usersCount: 8
+  },
+  // Perfil inativo sem usuários - pode ser excluído
+  {
+    id: "4",
+    name: "Perfil Teste Inativo",
+    description: "Perfil inativo sem usuários - pode ser excluído",
+    status: ProfileStatus.INATIVO,
+    screenPermissions: systemModules.flatMap(module => 
+      module.screens
+        .filter(screen => ["clientes"].includes(screen.id))
+        .map(screen => ({
+          screenId: screen.id,
+          screenName: screen.name,
+          module: module.name,
+          permissions: screen.availablePermissions.map(type => ({
+            type,
+            label: permissionLabels[type],
+            enabled: type === PermissionType.VISUALIZAR
+          }))
+        }))
+    ),
+    createdAt: new Date("2024-03-01"),
+    updatedAt: new Date("2024-03-01"),
+    usersCount: 0
+  },
+  // Perfil ativo sem usuários - pode ser desativado e depois excluído
+  {
+    id: "5",
+    name: "Perfil Vazio",
+    description: "Perfil ativo sem usuários - pode ser desativado e excluído",
+    status: ProfileStatus.ATIVO,
+    screenPermissions: systemModules.flatMap(module => 
+      module.screens
+        .filter(screen => ["tarefas"].includes(screen.id))
+        .map(screen => ({
+          screenId: screen.id,
+          screenName: screen.name,
+          module: module.name,
+          permissions: screen.availablePermissions.map(type => ({
+            type,
+            label: permissionLabels[type],
+            enabled: type === PermissionType.VISUALIZAR || type === PermissionType.CRIAR
+          }))
+        }))
+    ),
+    createdAt: new Date("2024-03-15"),
+    updatedAt: new Date("2024-03-15"),
+    usersCount: 0
   }
 ]
 
 export function useNiveisAcesso() {
-  const [perfis, setPerfis] = useState<PerfilAcesso[]>([])
+  const [profiles, setProfiles] = useState<AccessProfile[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"todos" | "ativo" | "inativo">("todos")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<ProfileStatus | "todos">("todos")
 
-  // Simular carregamento inicial
+  // Simula carregamento inicial
   useEffect(() => {
     setLoading(true)
     setTimeout(() => {
-      setPerfis(mockPerfis)
+      setProfiles(mockProfiles)
       setLoading(false)
     }, 500)
   }, [])
 
-  // Filtrar perfis baseado na busca e filtro de status
-  const perfisFiltrados = perfis.filter(perfil => {
-    const matchesSearch = perfil.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (perfil.descricao && perfil.descricao.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesStatus = statusFilter === "todos" || perfil.status === statusFilter
+  // Criar novo perfil
+  const createProfile = useCallback(async (data: ProfileFormData) => {
+    setLoading(true)
+    try {
+      // Validação de nome duplicado
+      const exists = profiles.some(p => 
+        p.name.toLowerCase() === data.name.toLowerCase()
+      )
+      
+      if (exists) {
+        throw new Error("Nome já existe no sistema")
+      }
+
+      const newProfile: AccessProfile = {
+        id: String(Date.now()),
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        usersCount: 0
+      }
+
+      setProfiles(prev => [...prev, newProfile])
+      toast.success("Perfil criado com sucesso")
+      return newProfile
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao criar perfil")
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }, [profiles])
+
+  // Atualizar perfil existente
+  const updateProfile = useCallback(async (id: string, data: ProfileFormData) => {
+    setLoading(true)
+    try {
+      // Validação de nome duplicado (exceto o próprio perfil)
+      const exists = profiles.some(p => 
+        p.id !== id && p.name.toLowerCase() === data.name.toLowerCase()
+      )
+      
+      if (exists) {
+        throw new Error("Nome já existe no sistema")
+      }
+
+      setProfiles(prev => prev.map(profile => 
+        profile.id === id 
+          ? { ...profile, ...data, updatedAt: new Date() }
+          : profile
+      ))
+      
+      toast.success("Permissões atualizadas com sucesso")
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao atualizar perfil")
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }, [profiles])
+
+  // Deletar perfil
+  const deleteProfile = useCallback(async (id: string) => {
+    setLoading(true)
+    try {
+      const profile = profiles.find(p => p.id === id)
+      
+      if (!profile) {
+        throw new Error("Perfil não encontrado")
+      }
+
+      // Só permite exclusão se:
+      // 1. Perfil está inativo E não tem usuários, OU
+      // 2. Perfil não tem usuários (independente do status)
+      if (profile.status === ProfileStatus.ATIVO && profile.usersCount && profile.usersCount > 0) {
+        throw new Error("Não é possível excluir perfil ativo com usuários. Desative o perfil primeiro.")
+      }
+
+      setProfiles(prev => prev.filter(p => p.id !== id))
+      toast.success("Perfil excluído com sucesso")
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao excluir perfil")
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }, [profiles])
+
+  // Alternar status do perfil
+  const toggleProfileStatus = useCallback(async (id: string) => {
+    setLoading(true)
+    try {
+      setProfiles(prev => prev.map(profile => {
+        if (profile.id === id) {
+          const newStatus = profile.status === ProfileStatus.ATIVO 
+            ? ProfileStatus.INATIVO 
+            : ProfileStatus.ATIVO
+          
+          // Se está desativando um perfil com usuários, simula transferência para Admin Master
+          if (newStatus === ProfileStatus.INATIVO && profile.usersCount && profile.usersCount > 0) {
+            // Simula transferência de usuários para o perfil Administrador (ID: "1")
+            const adminProfile = prev.find(p => p.id === "1")
+            if (adminProfile) {
+              // Atualiza o perfil Admin Master com os usuários transferidos
+              setProfiles(currentProfiles => currentProfiles.map(p => 
+                p.id === "1" 
+                  ? { ...p, usersCount: (p.usersCount || 0) + profile.usersCount! }
+                  : p
+              ))
+            }
+            
+            toast.success(
+              `Perfil desativado com sucesso. ${profile.usersCount} usuário(s) transferido(s) para Admin Master.`
+            )
+          } else {
+            toast.success(
+              newStatus === ProfileStatus.INATIVO 
+                ? "Perfil desativado com sucesso" 
+                : "Perfil ativado com sucesso"
+            )
+          }
+          
+          return { 
+            ...profile, 
+            status: newStatus, 
+            updatedAt: new Date(),
+            // Se desativou, zera o contador de usuários (foram transferidos)
+            usersCount: newStatus === ProfileStatus.INATIVO ? 0 : profile.usersCount
+          }
+        }
+        return profile
+      }))
+    } catch (error: any) {
+      toast.error("Erro ao alterar status do perfil")
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Buscar perfil por ID
+  const getProfileById = useCallback((id: string) => {
+    return profiles.find(p => p.id === id)
+  }, [profiles])
+
+  // Filtrar perfis
+  const filteredProfiles = profiles.filter(profile => {
+    const matchesSearch = searchQuery === "" || 
+      profile.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      profile.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    const matchesStatus = statusFilter === "todos" || profile.status === statusFilter
     
     return matchesSearch && matchesStatus
   })
 
-  // Criar novo perfil
-  const criarPerfil = async (data: PerfilAcessoForm): Promise<boolean> => {
-    setLoading(true)
-    setError(null)
+  // Gerar permissões vazias para todas as telas
+  const generateEmptyPermissions = useCallback((): ScreenPermission[] => {
+    return systemModules.flatMap(module => 
+      module.screens.map(screen => ({
+        screenId: screen.id,
+        screenName: screen.name,
+        module: module.name,
+        permissions: screen.availablePermissions.map(type => ({
+          type,
+          label: permissionLabels[type],
+          enabled: false
+        }))
+      }))
+    )
+  }, [])
 
-    try {
-      // Validar se nome já existe
-      const nomeExiste = perfis.some(perfil => 
-        perfil.nome.toLowerCase() === data.nome.toLowerCase()
-      )
+  // Selecionar todas as permissões
+  const selectAllPermissions = useCallback((permissions: ScreenPermission[]): ScreenPermission[] => {
+    return permissions.map(screen => ({
+      ...screen,
+      permissions: screen.permissions.map(perm => ({
+        ...perm,
+        enabled: true
+      }))
+    }))
+  }, [])
 
-      if (nomeExiste) {
-        setError("Nome já existe no sistema")
-        toast.error("Nome já existe no sistema", {
-          duration: 3000,
-          position: "bottom-right"
-        })
-        return false
-      }
+  // Selecionar todas as permissões de um módulo
+  const selectModulePermissions = useCallback(
+    (permissions: ScreenPermission[], moduleId: string): ScreenPermission[] => {
+      const module = systemModules.find(m => m.id === moduleId)
+      if (!module) return permissions
 
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const novoPerfil: PerfilAcesso = {
-        id: Date.now().toString(),
-        nome: data.nome,
-        descricao: data.descricao,
-        status: data.status,
-        permissoes: data.permissoes,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-
-      setPerfis(prev => [...prev, novoPerfil])
-      
-      toast.success("Perfil criado com sucesso!", {
-        duration: 2000,
-        position: "bottom-right"
+      return permissions.map(screen => {
+        const isInModule = module.screens.some(s => s.id === screen.screenId)
+        return {
+          ...screen,
+          permissions: screen.permissions.map(perm => ({
+            ...perm,
+            enabled: isInModule ? true : perm.enabled
+          }))
+        }
       })
+    }, []
+  )
 
-      return true
-    } catch (err) {
-      const errorMessage = "Erro ao criar perfil"
-      setError(errorMessage)
-      toast.error(errorMessage, {
-        duration: 3000,
-        position: "bottom-right"
+  // Selecionar todas as permissões de uma tela
+  const selectScreenPermissions = useCallback(
+    (permissions: ScreenPermission[], screenId: string): ScreenPermission[] => {
+      return permissions.map(screen => {
+        if (screen.screenId === screenId) {
+          return {
+            ...screen,
+            permissions: screen.permissions.map(perm => ({
+              ...perm,
+              enabled: true
+            }))
+          }
+        }
+        return screen
       })
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Editar perfil existente
-  const editarPerfil = async (id: string, data: PerfilAcessoForm): Promise<boolean> => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Validar se nome já existe (exceto o próprio perfil)
-      const nomeExiste = perfis.some(perfil => 
-        perfil.id !== id && perfil.nome.toLowerCase() === data.nome.toLowerCase()
-      )
-
-      if (nomeExiste) {
-        setError("Nome já existe no sistema")
-        toast.error("Nome já existe no sistema", {
-          duration: 3000,
-          position: "bottom-right"
-        })
-        return false
-      }
-
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      setPerfis(prev => prev.map(perfil => 
-        perfil.id === id 
-          ? { 
-              ...perfil, 
-              nome: data.nome,
-              descricao: data.descricao,
-              status: data.status,
-              permissoes: data.permissoes,
-              updatedAt: new Date() 
-            }
-          : perfil
-      ))
-
-      toast.success("Permissões atualizadas com sucesso!", {
-        duration: 2000,
-        position: "bottom-right"
-      })
-
-      return true
-    } catch (err) {
-      const errorMessage = "Erro ao atualizar perfil"
-      setError(errorMessage)
-      toast.error(errorMessage, {
-        duration: 3000,
-        position: "bottom-right"
-      })
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Alterar status do perfil (ativar/desativar)
-  const alterarStatus = async (id: string, novoStatus: "ativo" | "inativo"): Promise<boolean> => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      setPerfis(prev => prev.map(perfil => 
-        perfil.id === id 
-          ? { ...perfil, status: novoStatus, updatedAt: new Date() }
-          : perfil
-      ))
-
-      const statusLabel = novoStatus === "ativo" ? "ativado" : "desativado"
-      toast.success(`Perfil ${statusLabel} com sucesso!`, {
-        duration: 2000,
-        position: "bottom-right"
-      })
-
-      return true
-    } catch (err) {
-      const errorMessage = "Erro ao alterar status do perfil"
-      setError(errorMessage)
-      toast.error(errorMessage, {
-        duration: 3000,
-        position: "bottom-right"
-      })
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Excluir perfil (apenas se não estiver em uso)
-  const excluirPerfil = async (id: string): Promise<boolean> => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Simular verificação se perfil está em uso
-      // Em uma implementação real, verificaria no backend se há usuários vinculados
-      const perfilEmUso = Math.random() > 0.7 // 30% chance de estar em uso
-
-      if (perfilEmUso) {
-        setError("Não é possível excluir perfil em uso")
-        toast.error("Não é possível excluir perfil em uso", {
-          duration: 3000,
-          position: "bottom-right"
-        })
-        return false
-      }
-
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      setPerfis(prev => prev.filter(perfil => perfil.id !== id))
-
-      toast.success("Perfil excluído com sucesso!", {
-        duration: 2000,
-        position: "bottom-right"
-      })
-
-      return true
-    } catch (err) {
-      const errorMessage = "Erro ao excluir perfil"
-      setError(errorMessage)
-      toast.error(errorMessage, {
-        duration: 3000,
-        position: "bottom-right"
-      })
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Buscar perfil por ID
-  const buscarPerfilPorId = (id: string): PerfilAcesso | undefined => {
-    return perfis.find(perfil => perfil.id === id)
-  }
+    }, []
+  )
 
   return {
-    // Estados
-    perfis: perfisFiltrados,
+    profiles: filteredProfiles,
     loading,
-    error,
-    searchTerm,
+    searchQuery,
+    setSearchQuery,
     statusFilter,
-    
-    // Actions  
-    setSearchTerm,
     setStatusFilter,
-    criarPerfil,
-    editarPerfil,
-    alterarStatus,
-    excluirPerfil,
-    buscarPerfilPorId,
-    
-    // Utils
-    totalPerfis: perfis.length,
-    perfisAtivos: perfis.filter(p => p.status === "ativo").length,
-    perfisInativos: perfis.filter(p => p.status === "inativo").length
+    createProfile,
+    updateProfile,
+    deleteProfile,
+    toggleProfileStatus,
+    getProfileById,
+    generateEmptyPermissions,
+    selectAllPermissions,
+    selectModulePermissions,
+    selectScreenPermissions,
+    totalProfiles: profiles.length
   }
 }

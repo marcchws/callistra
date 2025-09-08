@@ -1,83 +1,123 @@
 import { z } from "zod"
 
-// Tipos baseados nos campos especificados no PRD
-export interface ChatParticipant {
+// Enum para tipos de chat
+export type ChatType = "internal" | "external"
+
+// Enum para tipos de mensagem
+export type MessageType = "text" | "audio" | "attachment"
+
+// Enum para status de mensagem
+export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "error"
+
+// Enum para status de chat
+export type ChatStatus = "active" | "closed" | "archived"
+
+// Interface para participante
+export interface Participant {
   id: string
   name: string
   email: string
-  type: 'user' | 'external_client'
   avatar?: string
+  isOnline?: boolean
+  isExternal: boolean
   lastSeen?: Date
 }
 
-export interface ChatMessage {
+// Interface para mensagem
+export interface Message {
   id: string
   chatId: string
   senderId: string
   senderName: string
-  content: string
-  type: 'text' | 'audio' | 'file'
-  fileName?: string
-  fileSize?: number
-  filePath?: string
+  type: MessageType
+  content?: string
+  audioUrl?: string
+  attachmentUrl?: string
+  attachmentName?: string
+  attachmentSize?: number
   timestamp: Date
-  isRead: boolean
+  status: MessageStatus
   readBy?: string[]
 }
 
+// Interface para chat
 export interface Chat {
   id: string
-  participants: ChatParticipant[]
-  type: 'internal' | 'external'
-  lastMessage?: ChatMessage
+  type: ChatType
+  participants: Participant[]
+  lastMessage?: Message
   unreadCount: number
-  isActive: boolean
+  status: ChatStatus
+  createdAt: Date
+  updatedAt: Date
   secureLink?: string
   clientEmail?: string
   clientDocumentDigits?: string
-  createdAt: Date
-  updatedAt: Date
 }
 
-// Schemas de validação baseados nos critérios de aceite
-export const createExternalChatSchema = z.object({
-  clientEmail: z.string().email("E-mail inválido").min(1, "E-mail obrigatório"),
-  clientName: z.string().min(1, "Nome do cliente obrigatório"),
-  documentDigits: z.string().length(5, "Informe exatamente 5 dígitos do documento"),
-  sendMethod: z.enum(['email', 'whatsapp'], {
-    required_error: "Selecione o método de envio"
-  })
+// Schema de validação para iniciar chat externo
+export const ExternalChatSchema = z.object({
+  clientName: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
+  clientEmail: z.string().email("E-mail inválido"),
+  clientDocument: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, "CPF inválido"),
+  sendMethod: z.enum(["email", "whatsapp"]),
+  whatsappNumber: z.string().optional(),
+  initialMessage: z.string().optional()
 })
 
-export const messageSchema = z.object({
-  content: z.string().min(1, "Mensagem não pode estar vazia"),
-  type: z.enum(['text', 'audio', 'file']).default('text')
-})
-
-export const externalAccessSchema = z.object({
+// Schema de validação para autenticação de cliente externo
+export const ClientAuthSchema = z.object({
   email: z.string().email("E-mail inválido"),
-  documentDigits: z.string().length(5, "Informe exatamente 5 dígitos do documento")
+  documentDigits: z.string()
+    .length(5, "Digite exatamente 5 dígitos")
+    .regex(/^\d{5}$/, "Apenas números são permitidos")
 })
 
-export type CreateExternalChatFormData = z.infer<typeof createExternalChatSchema>
-export type MessageFormData = z.infer<typeof messageSchema>
-export type ExternalAccessFormData = z.infer<typeof externalAccessSchema>
+// Schema de validação para envio de mensagem
+export const MessageSchema = z.object({
+  content: z.string().min(1, "Mensagem não pode estar vazia").optional(),
+  audioBlob: z.instanceof(Blob).optional(),
+  attachmentFile: z.instanceof(File).optional()
+}).refine(
+  (data) => data.content || data.audioBlob || data.attachmentFile,
+  { message: "Envie uma mensagem, áudio ou anexo" }
+)
 
-// Estados para gerenciamento da aplicação
-export interface ChatState {
-  chats: Chat[]
-  selectedChat: Chat | null
-  messages: Record<string, ChatMessage[]>
-  loading: boolean
-  error: string | null
-  searchTerm: string
-  isConnected: boolean
-}
-
-// Tipos para WebSocket
-export interface WebSocketMessage {
-  type: 'message' | 'notification' | 'status'
-  data: any
-  chatId?: string
+// Interface para notificação
+export interface Notification {
+  id: string
+  chatId: string
+  message: Message
   timestamp: Date
+  read: boolean
 }
+
+// Interface para link seguro
+export interface SecureLink {
+  id: string
+  chatId: string
+  token: string
+  url: string
+  expiresAt: Date
+  usedAt?: Date
+  clientEmail: string
+  clientDocumentDigits: string
+}
+
+// Mock data types
+export interface MockChat extends Chat {
+  messages: Message[]
+}
+
+// WebSocket event types
+export type WebSocketEvent = 
+  | { type: "message"; payload: Message }
+  | { type: "typing"; payload: { chatId: string; userId: string; isTyping: boolean } }
+  | { type: "status"; payload: { userId: string; isOnline: boolean } }
+  | { type: "read"; payload: { chatId: string; messageId: string; userId: string } }
+  | { type: "chat_closed"; payload: { chatId: string } }
+
+// Form types
+export type ExternalChatForm = z.infer<typeof ExternalChatSchema>
+export type ClientAuthForm = z.infer<typeof ClientAuthSchema>
+export type MessageForm = z.infer<typeof MessageSchema>

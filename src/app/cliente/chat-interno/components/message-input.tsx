@@ -1,279 +1,371 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { Send, Paperclip, Mic, X, FileText, Image, Music } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Progress } from "@/components/ui/progress"
-import { Badge } from "@/components/ui/badge"
+import { useState, useRef, useEffect } from "react"
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem
-} from "@/components/ui/form"
-import { cn } from "@/lib/utils"
-import { messageSchema, MessageFormData } from "../types"
+  Send,
+  Paperclip,
+  Mic,
+  MicOff,
+  X,
+  Image as ImageIcon,
+  FileText,
+  Smile
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 interface MessageInputProps {
-  onSendMessage: (message: MessageFormData, file?: File) => Promise<void>
-  disabled?: boolean
+  onSendMessage: (content: string) => void
+  onSendAudio: (audioBlob: Blob) => void
+  onSendAttachment: (file: File) => void
+  onTyping: (isTyping: boolean) => void
+  isRecording: boolean
+  setIsRecording: (isRecording: boolean) => void
 }
 
-export function MessageInput({ onSendMessage, disabled }: MessageInputProps) {
-  const [isRecording, setIsRecording] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploadProgress, setUploadProgress] = useState(0)
+export function MessageInput({
+  onSendMessage,
+  onSendAudio,
+  onSendAttachment,
+  onTyping,
+  isRecording,
+  setIsRecording
+}: MessageInputProps) {
+  const [message, setMessage] = useState("")
+  const [attachedFile, setAttachedFile] = useState<File | null>(null)
+  const [recordingTime, setRecordingTime] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  const form = useForm<MessageFormData>({
-    resolver: zodResolver(messageSchema),
-    defaultValues: {
-      content: "",
-      type: "text"
-    }
-  })
-
-  const handleSubmit = async (data: MessageFormData) => {
-    if (!data.content.trim() && !selectedFile) return
-
-    try {
-      // Se há arquivo, simular progresso de upload
-      if (selectedFile) {
-        setUploadProgress(0)
-        const interval = setInterval(() => {
-          setUploadProgress(prev => {
-            if (prev >= 100) {
-              clearInterval(interval)
-              return 100
-            }
-            return prev + 10
-          })
-        }, 100)
-      }
-
-      await onSendMessage(data, selectedFile || undefined)
-      
-      // Reset form
-      form.reset()
-      setSelectedFile(null)
-      setUploadProgress(0)
-      
-      // Focus textarea
-      if (textareaRef.current) {
-        textareaRef.current.focus()
-      }
-    } catch (error) {
-      setUploadProgress(0)
-      toast.error("Erro ao enviar mensagem")
-    }
+  // Formatação do tempo de gravação
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  // Lidar com mudança de texto e indicador de digitação
+  const handleMessageChange = (value: string) => {
+    setMessage(value)
 
-    // Validar tamanho do arquivo (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Arquivo muito grande. Máximo 10MB.")
-      return
-    }
+    // Enviar indicador de digitação
+    if (value.length > 0) {
+      onTyping(true)
 
-    setSelectedFile(file)
-    
-    // Se for arquivo, definir conteúdo da mensagem
-    if (file.type.startsWith('audio/')) {
-      form.setValue('type', 'audio')
-      form.setValue('content', 'Áudio')
+      // Limpar timeout anterior
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+
+      // Parar de digitar após 2 segundos
+      typingTimeoutRef.current = setTimeout(() => {
+        onTyping(false)
+      }, 2000)
     } else {
-      form.setValue('type', 'file')
-      form.setValue('content', file.name)
+      onTyping(false)
     }
   }
 
-  const removeFile = () => {
-    setSelectedFile(null)
-    setUploadProgress(0)
-    form.setValue('type', 'text')
-    form.setValue('content', "")
+  // Enviar mensagem
+  const handleSendMessage = () => {
+    if (message.trim()) {
+      onSendMessage(message.trim())
+      setMessage("")
+      onTyping(false)
+    }
+  }
+
+  // Lidar com tecla Enter
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
+  // Selecionar arquivo
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Verificar tamanho do arquivo (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("Arquivo muito grande. Máximo permitido: 10MB")
+        return
+      }
+
+      setAttachedFile(file)
+    }
+  }
+
+  // Enviar arquivo anexado
+  const handleSendAttachment = () => {
+    if (attachedFile) {
+      onSendAttachment(attachedFile)
+      setAttachedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  // Remover arquivo anexado
+  const handleRemoveAttachment = () => {
+    setAttachedFile(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
   }
 
-  const getFileIcon = (file: File) => {
-    if (file.type.startsWith('image/')) return Image
-    if (file.type.startsWith('audio/')) return Music
-    return FileText
-  }
+  // Iniciar gravação de áudio
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
 
-  const formatFileSize = (bytes: number) => {
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(1024))
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
-  }
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data)
+      }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      form.handleSubmit(handleSubmit)()
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
+        onSendAudio(audioBlob)
+        
+        // Limpar
+        stream.getTracks().forEach(track => track.stop())
+        setRecordingTime(0)
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+
+      // Iniciar contador de tempo
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+
+    } catch (error) {
+      console.error("Erro ao acessar microfone:", error)
+      toast.error("Não foi possível acessar o microfone")
     }
   }
 
-  const startRecording = () => {
-    setIsRecording(true)
-    // Em produção, iniciaria gravação de áudio real
-    toast.success("Gravação iniciada")
-    
-    // Simular parada automática após 3 segundos
-    setTimeout(() => {
+  // Parar gravação de áudio
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
       setIsRecording(false)
-      
-      // Simular arquivo de áudio
-      const audioBlob = new Blob([], { type: 'audio/mp3' })
-      const audioFile = new File([audioBlob], 'audio.mp3', { type: 'audio/mp3' })
-      setSelectedFile(audioFile)
-      form.setValue('type', 'audio')
-      form.setValue('content', 'Áudio')
-      
-      toast.success("Gravação finalizada")
-    }, 3000)
+
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+      }
+    }
   }
 
-  const currentValue = form.watch('content')
-  const hasContent = currentValue?.trim() || selectedFile
+  // Cancelar gravação
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current.onstop = () => {
+        // Limpar sem enviar
+        const stream = mediaRecorderRef.current?.stream
+        stream?.getTracks().forEach(track => track.stop())
+        setRecordingTime(0)
+      }
+      setIsRecording(false)
+
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+      }
+    }
+  }
+
+  // Cleanup ao desmontar
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+      }
+      if (mediaRecorderRef.current && isRecording) {
+        cancelRecording()
+      }
+    }
+  }, [])
+
+  const getFileIcon = (file: File) => {
+    if (file.type.startsWith("image/")) {
+      return <ImageIcon className="h-4 w-4" />
+    }
+    return <FileText className="h-4 w-4" />
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " B"
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+  }
 
   return (
-    <div className="border-t bg-white p-4">
-      {/* File Preview */}
-      {selectedFile && (
-        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              {(() => {
-                const Icon = getFileIcon(selectedFile)
-                return <Icon className="h-5 w-5 text-blue-600" />
-              })()}
+    <div className="border-t">
+      {/* Arquivo anexado */}
+      {attachedFile && (
+        <div className="px-4 py-2 bg-gray-50 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {getFileIcon(attachedFile)}
+              <div>
+                <p className="text-sm font-medium">{attachedFile.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(attachedFile.size)}
+                </p>
+              </div>
             </div>
-            
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {selectedFile.name}
-              </p>
-              <p className="text-xs text-gray-600">
-                {formatFileSize(selectedFile.size)}
-              </p>
-              
-              {uploadProgress > 0 && uploadProgress < 100 && (
-                <Progress value={uploadProgress} className="h-1 mt-1" />
-              )}
-            </div>
-            
             <Button
-              type="button"
-              size="sm"
               variant="ghost"
-              onClick={removeFile}
-              className="h-8 w-8 p-0"
+              size="icon"
+              onClick={handleRemoveAttachment}
+              className="h-6 w-6"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3 w-3" />
             </Button>
           </div>
         </div>
       )}
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3">
-          <div className="flex gap-2">
-            {/* Message Input */}
-            <div className="flex-1">
-              <FormField
-                control={form.control}
-                name="content"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Textarea
-                        ref={textareaRef}
-                        placeholder={selectedFile ? "Adicione uma mensagem (opcional)" : "Digite sua mensagem..."}
-                        {...field}
-                        onKeyPress={handleKeyPress}
-                        disabled={disabled || uploadProgress > 0}
-                        className="min-h-[80px] max-h-[120px] resize-none focus:ring-blue-500"
-                        rows={2}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+      {/* Gravação de áudio */}
+      {isRecording && (
+        <div className="px-4 py-3 bg-red-50 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="h-3 w-3 bg-red-500 rounded-full animate-pulse" />
+                <div className="absolute inset-0 h-3 w-3 bg-red-500 rounded-full animate-ping" />
+              </div>
+              <span className="text-sm font-medium">Gravando áudio...</span>
+              <span className="text-sm text-muted-foreground">
+                {formatRecordingTime(recordingTime)}
+              </span>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2">
-              {/* Attach File Button */}
+            <div className="flex items-center gap-2">
               <Button
-                type="button"
+                variant="ghost"
                 size="sm"
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled || uploadProgress > 0}
-                className="h-10 w-10 p-0"
+                onClick={cancelRecording}
               >
-                <Paperclip className="h-4 w-4" />
+                Cancelar
               </Button>
-
-              {/* Record Audio Button */}
               <Button
-                type="button"
                 size="sm"
-                variant="outline"
-                onClick={startRecording}
-                disabled={disabled || uploadProgress > 0 || isRecording}
-                className={cn(
-                  "h-10 w-10 p-0",
-                  isRecording && "bg-red-100 border-red-300 text-red-600"
-                )}
+                onClick={stopRecording}
+                className="bg-red-600 hover:bg-red-700"
               >
-                <Mic className={cn(
-                  "h-4 w-4",
-                  isRecording && "animate-pulse"
-                )} />
-              </Button>
-
-              {/* Send Button */}
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!hasContent || disabled || uploadProgress > 0}
-                className="h-10 w-10 p-0 bg-blue-600 hover:bg-blue-700"
-              >
-                <Send className="h-4 w-4" />
+                <MicOff className="h-4 w-4 mr-2" />
+                Parar
               </Button>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Recording Indicator */}
-          {isRecording && (
-            <div className="flex items-center gap-2 text-red-600">
-              <div className="h-2 w-2 bg-red-600 rounded-full animate-pulse" />
-              <span className="text-sm font-medium">Gravando áudio...</span>
-            </div>
+      {/* Input de mensagem */}
+      <div className="p-4">
+        <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileSelect}
+            className="hidden"
+            accept="*/*"
+          />
+
+          {/* Botão de anexo */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isRecording}
+                  className="shrink-0"
+                >
+                  <Paperclip className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Anexar arquivo</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Campo de texto */}
+          <div className="flex-1">
+            <Textarea
+              placeholder="Digite sua mensagem..."
+              value={message}
+              onChange={(e) => handleMessageChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isRecording || !!attachedFile}
+              className={cn(
+                "min-h-[40px] max-h-[120px] resize-none",
+                "focus:ring-blue-500"
+              )}
+              rows={1}
+            />
+          </div>
+
+          {/* Botões de ação */}
+          {message.trim() || attachedFile ? (
+            <Button
+              size="icon"
+              onClick={attachedFile ? handleSendAttachment : handleSendMessage}
+              className="bg-blue-600 hover:bg-blue-700 shrink-0"
+            >
+              <Send className="h-5 w-5" />
+            </Button>
+          ) : (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isRecording ? "destructive" : "ghost"}
+                    size="icon"
+                    onClick={isRecording ? stopRecording : startRecording}
+                    className="shrink-0"
+                  >
+                    <Mic className="h-5 w-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isRecording ? "Parar gravação" : "Gravar áudio"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
-        </form>
-      </Form>
-
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        onChange={handleFileSelect}
-        accept="image/*,audio/*,.pdf,.doc,.docx,.txt"
-      />
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,116 +1,58 @@
 import { z } from "zod"
 
-// Tipos baseados EXATAMENTE nos campos especificados no PRD
-export type TipoLancamento = "receita" | "despesa"
-export type StatusLancamento = "pendente" | "historico"
-
-// Categorias baseadas no link fornecido - implementação com categorias padrão
-export const categoriasReceitas = [
-  "Honorários Advocatícios",
-  "Taxas e Custas Processuais",
-  "Consultorias",
-  "Pareceres Jurídicos",
-  "Contratos",
-  "Outras Receitas"
-] as const
-
-export const categoriasDespesas = [
-  "Material de Escritório",
-  "Taxas e Custas Judiciais",
-  "Despesas com Pessoal",
-  "Infraestrutura",
-  "Marketing",
-  "Outras Despesas"
-] as const
-
-export const subcategoriasReceitas = {
-  "Honorários Advocatícios": ["Sucesso", "Contrato", "Dativo", "Pro Labore"],
-  "Taxas e Custas Processuais": ["Custas Judiciais", "Despesas Cartoriais", "Perícias"],
-  "Consultorias": ["Consultoria Empresarial", "Consultoria Tributária", "Consultoria Trabalhista"],
-  "Pareceres Jurídicos": ["Parecer Cível", "Parecer Tributário", "Parecer Trabalhista"],
-  "Contratos": ["Elaboração", "Revisão", "Aditivos"],
-  "Outras Receitas": ["Reembolsos", "Juros", "Diversas"]
-} as const
-
-export const subcategoriasDespesas = {
-  "Material de Escritório": ["Papelaria", "Informática", "Móveis"],
-  "Taxas e Custas Judiciais": ["Custas Processuais", "Cartório", "Perícias"],
-  "Despesas com Pessoal": ["Salários", "Encargos", "Benefícios"],
-  "Infraestrutura": ["Aluguel", "Energia", "Internet", "Telefone"],
-  "Marketing": ["Publicidade", "Site", "Material Gráfico"],
-  "Outras Despesas": ["Combustível", "Manutenção", "Diversas"]
-} as const
-
-export interface Anexo {
-  id: string
-  nome: string
-  url: string
-  tipo: string
-  tamanho: number
-  dataUpload: Date
+// Enums
+export enum TipoLancamento {
+  RECEITA = "RECEITA",
+  DESPESA = "DESPESA"
 }
 
-export interface Renegociacao {
-  id: string
-  dataRenegociacao: Date
-  valorOriginal: number
-  novoValor: number
-  jurosAplicados: number
-  observacoes?: string
-  usuarioResponsavel: string
+export enum StatusLancamento {
+  PENDENTE = "PENDENTE",
+  PAGO = "PAGO",
+  RECEBIDO = "RECEBIDO"
 }
 
-export interface LancamentoFinanceiro {
+// Interfaces
+export interface Lancamento {
   id: string
   tipo: TipoLancamento
   categoria: string
   subcategoria: string
   valor: number
   dataVencimento: Date
-  dataPagamento?: Date
+  dataPagamento?: Date | null
   status: StatusLancamento
-  processo?: string
-  beneficiario?: string
+  processo?: string | null
+  beneficiario?: string | null
   anexos?: Anexo[]
   renegociacoes?: Renegociacao[]
-  observacoes?: string
-  // Campos de auditoria
-  criadoPor: string
-  criadoEm: Date
-  modificadoPor?: string
-  modificadoEm?: Date
+  observacoes?: string | null
+  criadoPor?: string
+  criadoEm?: Date
+  atualizadoPor?: string
+  atualizadoEm?: Date
 }
 
-// Schema de validação baseado nos critérios de aceite
-export const LancamentoFinanceiroSchema = z.object({
-  tipo: z.enum(["receita", "despesa"], {
-    required_error: "Tipo é obrigatório"
-  }),
-  categoria: z.string().min(1, "Categoria é obrigatória"),
-  subcategoria: z.string().min(1, "Subcategoria é obrigatória"),
-  valor: z.number().positive("Valor deve ser positivo"),
-  dataVencimento: z.date({
-    required_error: "Data de vencimento é obrigatória"
-  }),
-  dataPagamento: z.date().optional(),
-  processo: z.string().optional(),
-  beneficiario: z.string().optional(),
-  observacoes: z.string().optional()
-})
+export interface Anexo {
+  id: string
+  nome: string
+  url: string
+  tamanho: number
+  tipo: string
+  uploadedAt: Date
+}
 
-export type LancamentoFinanceiroForm = z.infer<typeof LancamentoFinanceiroSchema>
+export interface Renegociacao {
+  id: string
+  dataRenegociacao: Date
+  valorOriginal: number
+  valorNovo: number
+  juros: number
+  motivo?: string
+  responsavel: string
+}
 
-// Schema para renegociação
-export const RenegociacaoSchema = z.object({
-  novoValor: z.number().positive("Novo valor deve ser positivo"),
-  jurosAplicados: z.number().min(0, "Juros não podem ser negativos"),
-  observacoes: z.string().optional()
-})
-
-export type RenegociacaoForm = z.infer<typeof RenegociacaoSchema>
-
-// Filtros para busca conforme critérios de aceite
-export interface FiltrosLancamento {
+export interface Filtros {
   tipo?: TipoLancamento
   categoria?: string
   status?: StatusLancamento
@@ -118,17 +60,55 @@ export interface FiltrosLancamento {
   beneficiario?: string
   dataInicio?: Date
   dataFim?: Date
-  valorMinimo?: number
-  valorMaximo?: number
+  agrupamento?: "processo" | "beneficiario" | null
 }
 
-// Agrupamento conforme especificado
-export type TipoAgrupamento = "processo" | "beneficiario" | "nenhum"
+// Schemas de validação
+export const LancamentoSchema = z.object({
+  tipo: z.nativeEnum(TipoLancamento, {
+    required_error: "Tipo é obrigatório"
+  }),
+  categoria: z.string().min(1, "Categoria é obrigatória"),
+  subcategoria: z.string().min(1, "Subcategoria é obrigatória"),
+  valor: z.number().positive("Valor deve ser maior que zero"),
+  dataVencimento: z.date({
+    required_error: "Data de vencimento é obrigatória"
+  }),
+  dataPagamento: z.date().nullable().optional(),
+  processo: z.string().nullable().optional(),
+  beneficiario: z.string().nullable().optional(),
+  observacoes: z.string().nullable().optional()
+})
 
-export interface LancamentoAgrupado {
-  chave: string
-  lancamentos: LancamentoFinanceiro[]
+export const RenegociacaoSchema = z.object({
+  valorNovo: z.number().positive("Novo valor deve ser maior que zero"),
+  juros: z.number().min(0, "Juros não pode ser negativo"),
+  motivo: z.string().optional()
+})
+
+export type LancamentoFormData = z.infer<typeof LancamentoSchema>
+export type RenegociacaoFormData = z.infer<typeof RenegociacaoSchema>
+
+// Tipos auxiliares
+export interface CategoriaInfo {
+  nome: string
+  subcategorias: string[]
+}
+
+export interface ResumoFinanceiro {
   totalReceitas: number
   totalDespesas: number
+  receitasPendentes: number
+  despesasPendentes: number
+  receitasRecebidas: number
+  despesasPagas: number
   saldo: number
+}
+
+export interface LancamentoAgrupado {
+  titulo: string
+  lancamentos: Lancamento[]
+  total: number
+  totalPendente: number
+  totalPago: number
 }

@@ -1,236 +1,241 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Plus, FileText, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Plus, FileText, DollarSign, AlertCircle, TrendingUp } from "lucide-react"
-import { FiltrosDocumentos } from "./components/filtros-documentos"
-import { TabelaDocumentos } from "./components/tabela-documentos"
-import { ModalCriarDocumento } from "./components/modal-criar-documento"
-import { ModalEditarDocumento } from "./components/modal-editar-documento"
-import { ModalRenegociacao } from "./components/modal-renegociacao"
-import { ModalVisualizarFinanceiro } from "./components/modal-visualizar-financeiro"
-import { useContratosEProcuracoes } from "./use-contratos-procuracoes"
-import { Documento, FiltrosBusca, OpcoesExportacao, UploadModelo } from "./types"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Sidebar } from "@/components/sidebar"
+import { ContractList } from "./contract-list"
+import { ContractForm } from "./contract-form"
+import { ContractDetail } from "./contract-detail"
+import { useContracts } from "./use-contracts"
+import { Contract, ContractFormData } from "./types"
 
 export default function ContratosEProcuracoesPage() {
-  // Estados dos modais
-  const [modalCriarAberto, setModalCriarAberto] = useState(false)
-  const [modalEditarAberto, setModalEditarAberto] = useState(false)
-  const [modalRenegociacaoAberto, setModalRenegociacaoAberto] = useState(false)
-  const [modalFinanceiroAberto, setModalFinanceiroAberto] = useState(false)
-  const [documentoSelecionado, setDocumentoSelecionado] = useState<Documento | null>(null)
-
-  // Hook principal com toda a lógica
+  const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list")
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
+  
   const {
-    documentos,
-    modelosSistema,
+    contracts,
     loading,
     error,
-    filtros,
-    criarDocumento,
-    editarDocumento,
-    excluirDocumento,
-    registrarRenegociacao,
-    uploadModelo,
-    exportarDocumento,
-    setFiltros,
-    totalDocumentos,
-    totalContratos,
-    totalProcuracoes,
-    valorTotalNegociado,
-    documentosPendentes,
-    documentosPagos,
-    documentosInadimplentes
-  } = useContratosEProcuracoes()
+    applyFilters,
+    createContract,
+    updateContract,
+    deleteContract,
+    addRenegotiation,
+    updatePaymentStatus,
+    exportDocument,
+  } = useContracts()
 
-  // Handlers dos modais
-  const handleCriarDocumento = async (novoDocumento: Omit<Documento, "id" | "dataCriacao" | "ultimaAtualizacao">) => {
-    const documento = await criarDocumento(novoDocumento)
-    return documento
+  const handleSelectContract = (contract: Contract) => {
+    setSelectedContract(contract)
+    setView("detail")
   }
 
-  const handleUploadModelo = async (arquivo: File, nome: string, tipo: string) => {
-    const uploadData: UploadModelo = {
-      nome,
-      arquivo,
-      tipoDocumento: tipo as any,
-      descricao: `Modelo personalizado de ${tipo}`
+  const handleCreateContract = async (data: ContractFormData) => {
+    try {
+      await createContract(data)
+      setView("list")
+    } catch (error) {
+      // Erro já tratado no hook
     }
-    await uploadModelo(uploadData)
   }
 
-  const handleEditarDocumento = (documento: Documento) => {
-    setDocumentoSelecionado(documento)
-    setModalEditarAberto(true)
+  const handleUpdateContract = async (data: ContractFormData) => {
+    if (!selectedContract) return
+    try {
+      await updateContract(selectedContract.id, data)
+      setView("list")
+      setSelectedContract(null)
+    } catch (error) {
+      // Erro já tratado no hook
+    }
   }
 
-  const handleVisualizarFinanceiro = (documento: Documento) => {
-    setDocumentoSelecionado(documento)
-    setModalFinanceiroAberto(true)
+  const handleDeleteContract = async () => {
+    if (!selectedContract) return
+    try {
+      await deleteContract(selectedContract.id)
+      setView("list")
+      setSelectedContract(null)
+    } catch (error) {
+      // Erro já tratado no hook
+    }
   }
 
-  const handleRenegociar = (documento: Documento) => {
-    setDocumentoSelecionado(documento)
-    setModalRenegociacaoAberto(true)
+  const handleExportDocument = async (format: "pdf" | "word") => {
+    if (!selectedContract) return
+    try {
+      await exportDocument(selectedContract.id, format)
+    } catch (error) {
+      // Erro já tratado no hook
+    }
   }
 
-  const handleLimparFiltros = () => {
-    setFiltros({})
+  const handleAddRenegotiation = async (renegotiation: any) => {
+    if (!selectedContract) return
+    try {
+      await addRenegotiation(selectedContract.id, renegotiation)
+      // Atualizar o contrato selecionado
+      const updated = contracts.find(c => c.id === selectedContract.id)
+      if (updated) setSelectedContract(updated)
+    } catch (error) {
+      // Erro já tratado no hook
+    }
   }
 
-  const formatarMoeda = (valor: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL"
-    }).format(valor)
+  const handleUpdatePaymentStatus = async (status: "pago" | "inadimplente", valorPago?: number) => {
+    if (!selectedContract) return
+    try {
+      await updatePaymentStatus(
+        selectedContract.id, 
+        status,
+        valorPago,
+        status === "pago" ? new Date() : undefined
+      )
+      // Atualizar o contrato selecionado
+      const updated = contracts.find(c => c.id === selectedContract.id)
+      if (updated) setSelectedContract(updated)
+    } catch (error) {
+      // Erro já tratado no hook
+    }
+  }
+
+  const handleEditContract = () => {
+    setView("edit")
+  }
+
+  const handleCancel = () => {
+    setView("list")
+    setSelectedContract(null)
+  }
+
+  // Renderização condicional baseada na view
+  const renderContent = () => {
+    // View de criação
+    if (view === "create") {
+      return (
+        <ContractForm
+          onSubmit={handleCreateContract}
+          onCancel={handleCancel}
+          loading={loading}
+        />
+      )
+    }
+
+    // View de edição
+    if (view === "edit" && selectedContract) {
+      return (
+        <ContractForm
+          contract={selectedContract}
+          onSubmit={handleUpdateContract}
+          onCancel={handleCancel}
+          loading={loading}
+        />
+      )
+    }
+
+    // View de detalhes
+    if (view === "detail" && selectedContract) {
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setView("list")}
+            >
+              Voltar
+            </Button>
+          </div>
+          <ContractDetail
+            contract={selectedContract}
+            onEdit={handleEditContract}
+            onDelete={handleDeleteContract}
+            onExport={handleExportDocument}
+            onAddRenegotiation={handleAddRenegotiation}
+            onUpdatePaymentStatus={handleUpdatePaymentStatus}
+            loading={loading}
+          />
+        </div>
+      )
+    }
+
+    // View de listagem (padrão)
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Contratos e Procurações</CardTitle>
+              <CardDescription>
+                Gerencie contratos e procurações do escritório
+              </CardDescription>
+            </div>
+            <Button 
+              className="gap-2 bg-blue-600 hover:bg-blue-700"
+              onClick={() => setView("create")}
+              disabled={loading}
+            >
+              <Plus className="h-4 w-4" />
+              Novo Documento
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading && contracts.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+          ) : error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          ) : (
+            <ContractList
+              contracts={contracts}
+              onSelectContract={handleSelectContract}
+              onApplyFilters={applyFilters}
+              loading={loading}
+            />
+          )}
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header da página */}
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Contratos e Procurações</h1>
-        <p className="text-muted-foreground">
-          Gerencie contratos e procurações com acompanhamento financeiro integrado ao contas a receber.
-        </p>
-      </div>
-
-      {/* Cards de estatísticas */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Documentos</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalDocumentos}</div>
-            <p className="text-xs text-muted-foreground">
-              {totalContratos} contratos • {totalProcuracoes} procurações
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total Negociado</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {formatarMoeda(valorTotalNegociado)}
+    <div className="flex h-screen bg-background">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto lg:ml-64">
+        <div className="container py-6">
+          <div className="space-y-6">
+            {/* Header da página */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <FileText className="h-6 w-6 text-blue-600" />
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  Gestão de Contratos e Procurações
+                </h1>
+              </div>
+              <p className="text-muted-foreground">
+                Crie, edite e gerencie contratos e procurações com modelos do sistema ou personalizados, 
+                acompanhe valores negociados, renegociações e status de pagamentos integrados ao financeiro.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Soma de todos os valores negociados
-            </p>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pagamentos</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{documentosPagos}</div>
-            <p className="text-xs text-muted-foreground">
-              {documentosPendentes} pendentes • {documentosInadimplentes} inadimplentes
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Atenção Necessária</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{documentosInadimplentes}</div>
-            <p className="text-xs text-muted-foreground">
-              Documentos com pagamento em atraso
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Botão de ação principal */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Seus Documentos</h2>
-          <p className="text-sm text-muted-foreground">
-            Crie, edite e gerencie contratos e procurações com integração financeira completa.
-          </p>
+            {/* Conteúdo dinâmico */}
+            {renderContent()}
+          </div>
         </div>
-        <Button 
-          onClick={() => setModalCriarAberto(true)}
-          className="bg-blue-600 hover:bg-blue-700 gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Novo Documento
-        </Button>
-      </div>
-
-      {/* Filtros de busca */}
-      <FiltrosDocumentos
-        filtros={filtros}
-        onFiltrosChange={setFiltros}
-        onLimparFiltros={handleLimparFiltros}
-      />
-
-      {/* Mensagem de erro */}
-      {error && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <p className="text-red-600">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tabela de documentos */}
-      <TabelaDocumentos
-        documentos={documentos}
-        loading={loading}
-        onEditar={handleEditarDocumento}
-        onExcluir={excluirDocumento}
-        onExportar={exportarDocumento}
-        onVisualizarFinanceiro={handleVisualizarFinanceiro}
-        onRenegociar={handleRenegociar}
-      />
-
-      {/* Modais */}
-      <ModalCriarDocumento
-        open={modalCriarAberto}
-        onOpenChange={setModalCriarAberto}
-        onCriar={handleCriarDocumento}
-        onUploadModelo={handleUploadModelo}
-        modelosSistema={modelosSistema}
-        loading={loading}
-      />
-
-      <ModalEditarDocumento
-        open={modalEditarAberto}
-        onOpenChange={setModalEditarAberto}
-        documento={documentoSelecionado}
-        onSalvar={editarDocumento}
-        loading={loading}
-      />
-
-      <ModalRenegociacao
-        open={modalRenegociacaoAberto}
-        onOpenChange={setModalRenegociacaoAberto}
-        documento={documentoSelecionado}
-        onRenegociar={registrarRenegociacao}
-        loading={loading}
-      />
-
-      <ModalVisualizarFinanceiro
-        open={modalFinanceiroAberto}
-        onOpenChange={setModalFinanceiroAberto}
-        documento={documentoSelecionado}
-      />
+      </main>
     </div>
   )
 }

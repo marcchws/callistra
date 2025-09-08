@@ -1,254 +1,267 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { FileText, Search, Bot, RotateCcw } from "lucide-react"
+import { Plus, Bot, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
-// Hooks e tipos
-import { useCriacaoPecasIA } from "./use-criacao-pecas-ia"
-import type { TipoFuncionalidade } from "./types"
-
 // Componentes
-import { ControleTokensComponent } from "./components/controle-tokens"
-import { RevisaoOrtografica } from "./components/revisao-ortografica"
-import { PesquisaJurisprudencia } from "./components/pesquisa-jurisprudencia"
-import { CriacaoPecaJuridica } from "./components/criacao-peca-juridica"
-import { ChatIA } from "./components/chat-ia"
-import { IntegracaoCliente } from "./components/integracao-cliente"
-import { CompartilhamentoPeca } from "./components/compartilhamento-peca"
-import { HistoricoPecas } from "./components/historico-pecas"
+import { TokensIndicator } from "./components/tokens-indicator"
+import { PecasList } from "./components/pecas-list"
+import { NovaPecaDialog } from "./components/nova-peca-dialog"
+import { RevisaoDialog } from "./components/revisao-dialog"
+import { PesquisaDialog } from "./components/pesquisa-dialog"
+import { CriacaoDialog } from "./components/criacao-dialog"
+import { CompartilharDialog } from "./components/compartilhar-dialog"
+import { VisualizarPecaDialog } from "./components/visualizar-peca-dialog"
+
+// Hooks e tipos
+import { usePecasIA } from "./hooks/use-pecas-ia"
+import { 
+  TipoFuncionalidade, 
+  PecaJuridica,
+  TipoPecaJuridica
+} from "./types"
 
 export default function CriacaoPecasIAPage() {
+  // Estados dos dialogs
+  const [novaPecaOpen, setNovaPecaOpen] = useState(false)
+  const [revisaoOpen, setRevisaoOpen] = useState(false)
+  const [pesquisaOpen, setPesquisaOpen] = useState(false)
+  const [criacaoOpen, setCriacaoOpen] = useState(false)
+  const [compartilharOpen, setCompartilharOpen] = useState(false)
+  const [visualizarOpen, setVisualizarOpen] = useState(false)
+  
+  // Estados de dados
+  const [pecaSelecionada, setPecaSelecionada] = useState<PecaJuridica | null>(null)
+  
+  // Hook principal
   const {
-    // Estado
+    pecas,
+    clientes,
+    planoTokens,
     loading,
-    error,
-    pecaAtual,
-    controleTokens,
-    historicoPecas,
-    clientesDisponiveis,
-    tipoAtivo,
-    pecaSelecionada,
-    promptEditado,
-    arquivoUpload,
-    
-    // Dados estáticos
-    promptsPadrao,
-    tiposPecas,
-    
-    // Ações
-    enviarParaIA,
-    integrarComCliente,
+    processando,
+    criarPeca,
     compartilharPeca,
     excluirPeca,
-    downloadArquivo,
-    resetarPeca,
-    
-    // Setters
-    setTipoAtivo,
-    setPecaSelecionada,
-    setPromptEditado,
-    setArquivoUpload
-  } = useCriacaoPecasIA()
+    integrarCliente,
+    pesquisarJurisprudencia,
+    downloadArquivo
+  } = usePecasIA()
 
-  // Controle da aba ativa
-  const [abaAtiva, setAbaAtiva] = useState<TipoFuncionalidade>("revisao_ortografica")
-
-  // Handles para mudança de tipo
-  const handleMudancaTipo = (novoTipo: TipoFuncionalidade) => {
-    setTipoAtivo(novoTipo)
-    setAbaAtiva(novoTipo)
-    // Reset dos estados específicos ao mudar de tipo
-    setPromptEditado("")
-    setPecaSelecionada(null)
-    setArquivoUpload(null)
-  }
-
-  // Handle para seleção de peça do histórico
-  const handleSelecionarPecaHistorico = (peca: any) => {
-    // Implementar lógica para carregar peça selecionada
-    toast.info("Peça carregada do histórico", { duration: 2000, position: "bottom-right" })
-  }
-
-  // Handle para exclusão de peça (apenas criador)
-  const handleExcluirPeca = async () => {
-    if (pecaAtual) {
-      await excluirPeca(pecaAtual.id)
-      resetarPeca()
+  // Handlers de seleção de tipo
+  const handleSelectType = (tipo: TipoFuncionalidade) => {
+    switch (tipo) {
+      case "revisao_ortografica":
+        setRevisaoOpen(true)
+        break
+      case "pesquisa_jurisprudencia":
+        setPesquisaOpen(true)
+        break
+      case "criacao_peca":
+        setCriacaoOpen(true)
+        break
     }
   }
 
+  // Handler de revisão ortográfica
+  const handleRevisao = async (prompt: string, arquivo?: File) => {
+    const result = await criarPeca("revisao_ortografica", prompt, undefined, arquivo)
+    if (result) {
+      setRevisaoOpen(false)
+      toast.success("Documento revisado com sucesso! Você pode fazer o download na lista de peças.")
+    }
+    return result
+  }
+
+  // Handler de pesquisa de jurisprudência
+  const handlePesquisa = async (prompt: string) => {
+    const resultados = await pesquisarJurisprudencia(prompt)
+    
+    if (resultados.length > 0) {
+      // Salvar pesquisa no histórico
+      await criarPeca("pesquisa_jurisprudencia", prompt)
+    }
+    
+    return resultados
+  }
+
+  // Handler de criação de peça
+  const handleCriacao = async (prompt: string, tipoPeca: TipoPecaJuridica) => {
+    const result = await criarPeca("criacao_peca", prompt, tipoPeca)
+    return result
+  }
+
+  // Handler de visualização
+  const handleView = (peca: PecaJuridica) => {
+    setPecaSelecionada(peca)
+    setVisualizarOpen(true)
+  }
+
+  // Handler de compartilhamento
+  const handleShare = (peca: PecaJuridica) => {
+    setPecaSelecionada(peca)
+    setCompartilharOpen(true)
+  }
+
+  // Handler de download
+  const handleDownload = (peca: PecaJuridica) => {
+    if (peca.arquivoProcessado) {
+      downloadArquivo(peca.arquivoProcessado.url, peca.arquivoProcessado.nome)
+    } else {
+      toast.error("Arquivo não disponível para download")
+    }
+  }
+
+  // Handler de exclusão
+  const handleDelete = async (pecaId: string) => {
+    await excluirPeca(pecaId)
+  }
+
+  // Handler de compartilhamento confirmado
+  const handleCompartilharConfirm = async (pecaId: string, usuarioId: string) => {
+    await compartilharPeca(pecaId, usuarioId)
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Cabeçalho da página */}
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Criação de peças com IA</h1>
-        <p className="text-muted-foreground">
-          Revisão ortográfica, pesquisa de jurisprudência e criação de peças jurídicas com auxílio de IA, 
-          controle de tokens por plano e compartilhamento
-        </p>
-      </div>
-
-      {/* Controle de Tokens */}
-      <ControleTokensComponent controleTokens={controleTokens} />
-
-      {/* Erro geral */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-sm font-medium text-red-800">Erro no sistema</div>
-          <div className="text-xs text-red-600 mt-1">{error}</div>
-        </div>
-      )}
-
-      {/* Layout principal */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Coluna esquerda - Controles principais */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Seletor de funcionalidade */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-medium">Selecione a funcionalidade</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={abaAtiva} onValueChange={(value) => handleMudancaTipo(value as TipoFuncionalidade)}>
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="revisao_ortografica" className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Revisão
-                  </TabsTrigger>
-                  <TabsTrigger value="pesquisa_jurisprudencia" className="flex items-center gap-2">
-                    <Search className="h-4 w-4" />
-                    Pesquisa
-                  </TabsTrigger>
-                  <TabsTrigger value="criacao_peca_juridica" className="flex items-center gap-2">
-                    <Bot className="h-4 w-4" />
-                    Peça Jurídica
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* Conteúdo das abas */}
-                <div className="mt-6">
-                  <TabsContent value="revisao_ortografica" className="space-y-0">
-                    <RevisaoOrtografica
-                      promptPadrao={promptsPadrao.revisao_ortografica}
-                      promptEditado={promptEditado}
-                      setPromptEditado={setPromptEditado}
-                      arquivoUpload={arquivoUpload}
-                      setArquivoUpload={setArquivoUpload}
-                      onEnviarParaIA={enviarParaIA}
-                      loading={loading.enviando_ia}
-                      arquivoRevisado={pecaAtual?.arquivo_revisado}
-                      onDownload={downloadArquivo}
-                      loadingDownload={loading.exportando_arquivo}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="pesquisa_jurisprudencia" className="space-y-0">
-                    <PesquisaJurisprudencia
-                      promptPadrao={promptsPadrao.pesquisa_jurisprudencia}
-                      promptEditado={promptEditado}
-                      setPromptEditado={setPromptEditado}
-                      onEnviarParaIA={enviarParaIA}
-                      loading={loading.enviando_ia}
-                      resultadoPesquisa={pecaAtual?.resultado_pesquisa}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="criacao_peca_juridica" className="space-y-0">
-                    <CriacaoPecaJuridica
-                      promptPadrao={promptsPadrao.criacao_peca_juridica}
-                      promptEditado={promptEditado}
-                      setPromptEditado={setPromptEditado}
-                      tiposPecas={tiposPecas}
-                      pecaSelecionada={pecaSelecionada}
-                      setPecaSelecionada={setPecaSelecionada}
-                      onEnviarParaIA={enviarParaIA}
-                      loading={loading.enviando_ia}
-                    />
-                  </TabsContent>
+    <div className="flex h-screen bg-background">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto lg:ml-64">
+        <div className="container py-6">
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+                    <Bot className="h-6 w-6 text-blue-600" />
+                    Criação de Peças com IA
+                  </h1>
+                  <p className="text-muted-foreground">
+                    Crie, revise e pesquise documentos jurídicos com auxílio de inteligência artificial
+                  </p>
                 </div>
-              </Tabs>
-            </CardContent>
-          </Card>
+                <Button 
+                  onClick={() => setNovaPecaOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700 gap-2"
+                  disabled={planoTokens.tokensRestantes < 500}
+                >
+                  <Plus className="h-4 w-4" />
+                  Nova Criação com IA
+                </Button>
+              </div>
+            </div>
 
-          {/* Chat com IA - aparece após envio */}
-          {(pecaAtual?.chat_peca_juridica.length > 0 || loading.enviando_ia) && (
-            <ChatIA
-              mensagens={pecaAtual?.chat_peca_juridica || []}
-              loading={loading.enviando_ia}
-            />
-          )}
-
-          {/* Integração com Cliente - aparece após resposta da IA para peças jurídicas */}
-          {pecaAtual && (abaAtiva === "criacao_peca_juridica" || pecaAtual.tipo_funcionalidade === "criacao_peca_juridica") && (
-            <IntegracaoCliente
-              clientesDisponiveis={clientesDisponiveis}
-              clienteIntegrado={pecaAtual.dados_cliente_integrado}
-              arquivoExportado={pecaAtual.arquivo_exportado}
-              onIntegrarCliente={integrarComCliente}
-              onDownload={downloadArquivo}
-              loading={loading.integrando_cliente}
-              loadingDownload={loading.exportando_arquivo}
-            />
-          )}
-
-          {/* Compartilhamento - aparece quando há peça ativa */}
-          {pecaAtual && (
-            <CompartilhamentoPeca
-              compartilhamentos={pecaAtual.compartilhamento}
-              onCompartilhar={compartilharPeca}
-              onExcluirPeca={handleExcluirPeca}
-              loading={loading.compartilhando}
-              loadingExclusao={loading.excluindo}
-              isCreator={pecaAtual.usuario_criador === "usuario_atual"} // Substituir por lógica real
-            />
-          )}
-        </div>
-
-        {/* Coluna direita - Histórico */}
-        <div className="space-y-6">
-          <HistoricoPecas
-            pecas={historicoPecas}
-            pecaAtual={pecaAtual}
-            onSelecionarPeca={handleSelecionarPecaHistorico}
-            loading={loading.carregando_historico}
-          />
-
-          {/* Ações rápidas */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-medium">Ações Rápidas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={resetarPeca}
-                disabled={Object.values(loading).some(Boolean)}
-              >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Nova Peça
-              </Button>
-
-              {controleTokens && (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Status do Plano</div>
+            {/* Indicador de tokens */}
+            <div className="grid gap-6 md:grid-cols-4">
+              <div className="md:col-span-1">
+                <TokensIndicator planoTokens={planoTokens} />
+              </div>
+              
+              {/* Cards de estatísticas */}
+              <div className="md:col-span-3 grid gap-4 md:grid-cols-3">
+                <div className="bg-white border rounded-lg p-4">
                   <div className="flex items-center justify-between">
-                    <Badge variant="outline">{controleTokens.plano_atual}</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {controleTokens.tokens_disponiveis.toLocaleString()} tokens
-                    </span>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Peças Criadas</p>
+                      <p className="text-2xl font-bold">{pecas.length}</p>
+                    </div>
+                    <Sparkles className="h-8 w-8 text-blue-600 opacity-20" />
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Compartilhadas</p>
+                      <p className="text-2xl font-bold">
+                        {pecas.filter(p => p.compartilhamentos.length > 0).length}
+                      </p>
+                    </div>
+                    <Sparkles className="h-8 w-8 text-green-600 opacity-20" />
+                  </div>
+                </div>
+                
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Tokens Hoje</p>
+                      <p className="text-2xl font-bold">
+                        {pecas
+                          .filter(p => 
+                            p.dataCriacao.toDateString() === new Date().toDateString()
+                          )
+                          .reduce((acc, p) => acc + p.tokensUtilizados, 0)
+                          .toLocaleString()}
+                      </p>
+                    </div>
+                    <Sparkles className="h-8 w-8 text-yellow-600 opacity-20" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Lista de peças */}
+            <PecasList
+              pecas={pecas}
+              onView={handleView}
+              onShare={handleShare}
+              onDelete={handleDelete}
+              onDownload={handleDownload}
+              loading={loading}
+            />
+
+            {/* Dialogs */}
+            <NovaPecaDialog
+              open={novaPecaOpen}
+              onOpenChange={setNovaPecaOpen}
+              onSelectType={handleSelectType}
+            />
+
+            <RevisaoDialog
+              open={revisaoOpen}
+              onOpenChange={setRevisaoOpen}
+              onSubmit={handleRevisao}
+              processando={processando}
+            />
+
+            <PesquisaDialog
+              open={pesquisaOpen}
+              onOpenChange={setPesquisaOpen}
+              onSubmit={handlePesquisa}
+              processando={processando}
+            />
+
+            <CriacaoDialog
+              open={criacaoOpen}
+              onOpenChange={setCriacaoOpen}
+              onSubmit={handleCriacao}
+              onIntegrarCliente={integrarCliente}
+              clientes={clientes}
+              processando={processando}
+            />
+
+            <CompartilharDialog
+              open={compartilharOpen}
+              onOpenChange={setCompartilharOpen}
+              peca={pecaSelecionada}
+              onCompartilhar={handleCompartilharConfirm}
+            />
+
+            <VisualizarPecaDialog
+              open={visualizarOpen}
+              onOpenChange={setVisualizarOpen}
+              peca={pecaSelecionada}
+              onDownload={handleDownload}
+              onShare={handleShare}
+              onIntegrarCliente={integrarCliente}
+              clientes={clientes}
+            />
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

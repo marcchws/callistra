@@ -2,397 +2,535 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { toast } from "sonner"
-import { 
+import type { 
   Chat, 
-  ChatMessage, 
-  ChatState, 
-  CreateExternalChatFormData,
-  MessageFormData,
-  ExternalAccessFormData,
-  WebSocketMessage 
+  Message, 
+  MessageType, 
+  MessageStatus,
+  Participant,
+  WebSocketEvent,
+  ExternalChatForm,
+  ClientAuthForm,
+  Notification
 } from "./types"
 
-// Mock data para demonstração - em produção viria de API/WebSocket
+// Mock de dados inicial
 const mockChats: Chat[] = [
   {
     id: "1",
     type: "internal",
     participants: [
-      { id: "user1", name: "João Silva", email: "joao@callistra.com", type: "user" },
-      { id: "user2", name: "Maria Santos", email: "maria@callistra.com", type: "user" }
+      { id: "user1", name: "João Silva", email: "joao@escritorio.com", isOnline: true, isExternal: false },
+      { id: "user2", name: "Maria Santos", email: "maria@escritorio.com", isOnline: false, isExternal: false }
     ],
     lastMessage: {
       id: "msg1",
       chatId: "1",
       senderId: "user2",
       senderName: "Maria Santos",
-      content: "Podemos revisar o contrato hoje?",
       type: "text",
-      timestamp: new Date(),
-      isRead: false
+      content: "Podemos revisar o processo amanhã?",
+      timestamp: new Date(Date.now() - 1000 * 60 * 5),
+      status: "delivered"
     },
-    unreadCount: 1,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date()
+    unreadCount: 2,
+    status: "active",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 5)
   },
   {
-    id: "2", 
+    id: "2",
     type: "external",
     participants: [
-      { id: "user1", name: "João Silva", email: "joao@callistra.com", type: "user" },
-      { id: "client1", name: "Carlos Mendes", email: "carlos@email.com", type: "external_client" }
+      { id: "user1", name: "João Silva", email: "joao@escritorio.com", isOnline: true, isExternal: false },
+      { id: "client1", name: "Pedro Costa", email: "pedro@gmail.com", isOnline: false, isExternal: true }
     ],
     lastMessage: {
       id: "msg2",
       chatId: "2",
       senderId: "client1",
-      senderName: "Carlos Mendes",
-      content: "Obrigado pelas informações!",
-      type: "text",
-      timestamp: new Date(Date.now() - 300000),
-      isRead: true
+      senderName: "Pedro Costa",
+      type: "attachment",
+      attachmentUrl: "/docs/contrato.pdf",
+      attachmentName: "contrato.pdf",
+      attachmentSize: 256000,
+      timestamp: new Date(Date.now() - 1000 * 60 * 30),
+      status: "read"
     },
     unreadCount: 0,
-    isActive: true,
+    status: "active",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 30),
     secureLink: "https://callistra.com/chat/secure/abc123",
-    clientEmail: "carlos@email.com",
-    clientDocumentDigits: "12345",
-    createdAt: new Date(),
-    updatedAt: new Date()
+    clientEmail: "pedro@gmail.com",
+    clientDocumentDigits: "12345"
   }
 ]
 
-const mockMessages: Record<string, ChatMessage[]> = {
+const mockMessages: Record<string, Message[]> = {
   "1": [
     {
-      id: "msg1-1",
+      id: "msg10",
       chatId: "1",
       senderId: "user1",
       senderName: "João Silva",
-      content: "Oi Maria, como está o processo do cliente X?",
       type: "text",
-      timestamp: new Date(Date.now() - 600000),
-      isRead: true
+      content: "Oi Maria, como está o andamento do processo?",
+      timestamp: new Date(Date.now() - 1000 * 60 * 60),
+      status: "read"
     },
     {
-      id: "msg1-2",
-      chatId: "1", 
+      id: "msg11",
+      chatId: "1",
       senderId: "user2",
       senderName: "Maria Santos",
-      content: "Está em andamento. Preciso de alguns documentos.",
       type: "text",
-      timestamp: new Date(Date.now() - 300000),
-      isRead: true
+      content: "Estou finalizando a petição inicial",
+      timestamp: new Date(Date.now() - 1000 * 60 * 30),
+      status: "read"
     },
     {
-      id: "msg1-3",
+      id: "msg1",
       chatId: "1",
-      senderId: "user2", 
+      senderId: "user2",
       senderName: "Maria Santos",
-      content: "Podemos revisar o contrato hoje?",
       type: "text",
-      timestamp: new Date(),
-      isRead: false
+      content: "Podemos revisar o processo amanhã?",
+      timestamp: new Date(Date.now() - 1000 * 60 * 5),
+      status: "delivered"
     }
   ],
   "2": [
     {
-      id: "msg2-1",
-      chatId: "2",
-      senderId: "user1", 
-      senderName: "João Silva",
-      content: "Olá Carlos, como posso ajudá-lo hoje?",
-      type: "text",
-      timestamp: new Date(Date.now() - 600000),
-      isRead: true
-    },
-    {
-      id: "msg2-2",
-      chatId: "2",
-      senderId: "client1",
-      senderName: "Carlos Mendes", 
-      content: "Gostaria de saber sobre o andamento do meu processo.",
-      type: "text",
-      timestamp: new Date(Date.now() - 400000),
-      isRead: true
-    },
-    {
-      id: "msg2-3",
+      id: "msg20",
       chatId: "2",
       senderId: "user1",
       senderName: "João Silva",
-      content: "Seu processo está na fase de análise. Em breve teremos novidades.",
-      type: "text", 
-      timestamp: new Date(Date.now() - 350000),
-      isRead: true
+      type: "text",
+      content: "Olá Pedro, segue o link para acompanhar seu processo",
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
+      status: "read"
     },
     {
-      id: "msg2-4",
+      id: "msg21",
       chatId: "2",
       senderId: "client1",
-      senderName: "Carlos Mendes",
-      content: "Obrigado pelas informações!",
+      senderName: "Pedro Costa",
       type: "text",
-      timestamp: new Date(Date.now() - 300000),
-      isRead: true
+      content: "Obrigado! Vou verificar os documentos",
+      timestamp: new Date(Date.now() - 1000 * 60 * 45),
+      status: "read"
+    },
+    {
+      id: "msg2",
+      chatId: "2",
+      senderId: "client1",
+      senderName: "Pedro Costa",
+      type: "attachment",
+      attachmentUrl: "/docs/contrato.pdf",
+      attachmentName: "contrato.pdf",
+      attachmentSize: 256000,
+      timestamp: new Date(Date.now() - 1000 * 60 * 30),
+      status: "read"
     }
   ]
 }
 
 export function useChat() {
-  const [state, setState] = useState<ChatState>({
-    chats: [],
-    selectedChat: null,
-    messages: {},
-    loading: true,
-    error: null,
-    searchTerm: "",
-    isConnected: false
-  })
-
+  const [chats, setChats] = useState<Chat[]>(mockChats)
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({})
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isRecording, setIsRecording] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Simular conexão WebSocket
-  const connectWebSocket = useCallback(() => {
-    // Em produção, conectaria ao WebSocket real
-    // wsRef.current = new WebSocket('ws://localhost:8080/chat')
-    
-    // Simular conexão
-    setTimeout(() => {
-      setState(prev => ({ ...prev, isConnected: true }))
-      toast.success("Conectado ao chat em tempo real", { duration: 2000 })
-    }, 1000)
-  }, [])
-
-  // Carregar dados iniciais
   useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        setState(prev => ({ ...prev, loading: true }))
-        
-        // Simular delay de carregamento
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        setState(prev => ({
-          ...prev,
-          chats: mockChats,
-          messages: mockMessages,
-          loading: false
-        }))
-        
-        connectWebSocket()
-      } catch (error) {
-        setState(prev => ({
-          ...prev,
-          error: "Erro ao carregar conversas",
-          loading: false
-        }))
-        toast.error("Erro ao carregar conversas")
-      }
-    }
-
-    loadInitialData()
-  }, [connectWebSocket])
-
-  // Selecionar conversa
-  const selectChat = useCallback((chat: Chat) => {
-    setState(prev => ({ ...prev, selectedChat: chat }))
-    
-    // Marcar mensagens como lidas
-    if (chat.unreadCount > 0) {
-      setState(prev => ({
-        ...prev,
-        chats: prev.chats.map(c => 
-          c.id === chat.id ? { ...c, unreadCount: 0 } : c
-        )
-      }))
-    }
-  }, [])
-
-  // Enviar mensagem
-  const sendMessage = useCallback(async (messageData: MessageFormData, file?: File) => {
-    if (!state.selectedChat) return
-
-    try {
-      const newMessage: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        chatId: state.selectedChat.id,
-        senderId: "user1", // Em produção, viria do contexto de usuário
-        senderName: "Usuário Atual",
-        content: messageData.content,
-        type: messageData.type,
-        fileName: file?.name,
-        fileSize: file?.size,
-        timestamp: new Date(),
-        isRead: false
-      }
-
-      // Se for arquivo, simular upload
-      if (file) {
-        toast.success("Arquivo enviado com sucesso", { duration: 2000 })
-      }
-
-      // Atualizar estado
-      setState(prev => ({
-        ...prev,
-        messages: {
-          ...prev.messages,
-          [state.selectedChat!.id]: [
-            ...(prev.messages[state.selectedChat!.id] || []),
-            newMessage
-          ]
-        },
-        chats: prev.chats.map(chat => 
-          chat.id === state.selectedChat!.id 
-            ? { ...chat, lastMessage: newMessage, updatedAt: new Date() }
-            : chat
-        )
-      }))
-
-      // Simular envio via WebSocket
-      if (wsRef.current && state.isConnected) {
-        const wsMessage: WebSocketMessage = {
-          type: 'message',
-          data: newMessage,
-          chatId: state.selectedChat.id,
-          timestamp: new Date()
+    // Simular eventos WebSocket
+    const interval = setInterval(() => {
+      // Simular nova mensagem ocasionalmente
+      if (Math.random() > 0.95 && selectedChatId) {
+        const newMessage: Message = {
+          id: `msg-${Date.now()}`,
+          chatId: selectedChatId,
+          senderId: "user2",
+          senderName: "Maria Santos",
+          type: "text",
+          content: "Nova mensagem simulada",
+          timestamp: new Date(),
+          status: "delivered"
         }
-        // wsRef.current.send(JSON.stringify(wsMessage))
+        
+        handleWebSocketMessage({
+          type: "message",
+          payload: newMessage
+        })
       }
+    }, 5000)
 
-      toast.success("Mensagem enviada", { duration: 1500 })
-    } catch (error) {
-      toast.error("Erro ao enviar mensagem")
+    return () => clearInterval(interval)
+  }, [selectedChatId])
+
+  // Carregar mensagens quando selecionar um chat
+  useEffect(() => {
+    if (selectedChatId) {
+      setLoading(true)
+      // Simular delay de carregamento
+      setTimeout(() => {
+        setMessages(mockMessages[selectedChatId] || [])
+        // Marcar mensagens como lidas
+        setChats(prev => prev.map(chat => 
+          chat.id === selectedChatId 
+            ? { ...chat, unreadCount: 0 }
+            : chat
+        ))
+        setLoading(false)
+      }, 300)
     }
-  }, [state.selectedChat, state.isConnected])
+  }, [selectedChatId])
 
-  // Criar chat com cliente externo
-  const createExternalChat = useCallback(async (data: CreateExternalChatFormData) => {
+  // Função para lidar com eventos WebSocket
+  const handleWebSocketMessage = useCallback((event: WebSocketEvent) => {
+    switch (event.type) {
+      case "message":
+        const message = event.payload
+        setMessages(prev => [...prev, message])
+        
+        // Atualizar última mensagem no chat
+        setChats(prev => prev.map(chat => 
+          chat.id === message.chatId
+            ? { 
+                ...chat, 
+                lastMessage: message,
+                unreadCount: chat.id !== selectedChatId ? chat.unreadCount + 1 : 0,
+                updatedAt: new Date()
+              }
+            : chat
+        ))
+
+        // Adicionar notificação se não for o chat atual
+        if (message.chatId !== selectedChatId) {
+          const notification: Notification = {
+            id: `notif-${Date.now()}`,
+            chatId: message.chatId,
+            message,
+            timestamp: new Date(),
+            read: false
+          }
+          setNotifications(prev => [...prev, notification])
+          toast.success(`Nova mensagem de ${message.senderName}`, {
+            duration: 3000
+          })
+        }
+        break
+
+      case "typing":
+        const { userId, isTyping } = event.payload
+        setTypingUsers(prev => ({ ...prev, [userId]: isTyping }))
+        break
+
+      case "status":
+        const { userId: statusUserId, isOnline } = event.payload
+        setChats(prev => prev.map(chat => ({
+          ...chat,
+          participants: chat.participants.map(p => 
+            p.id === statusUserId ? { ...p, isOnline } : p
+          )
+        })))
+        break
+
+      case "read":
+        const { messageId } = event.payload
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId ? { ...msg, status: "read" as MessageStatus } : msg
+        ))
+        break
+
+      case "chat_closed":
+        const { chatId } = event.payload
+        setChats(prev => prev.map(chat => 
+          chat.id === chatId ? { ...chat, status: "closed" } : chat
+        ))
+        toast.info("Chat encerrado")
+        break
+    }
+  }, [selectedChatId])
+
+  // Enviar mensagem de texto
+  const sendMessage = useCallback(async (content: string) => {
+    if (!selectedChatId || !content.trim()) return
+
+    const newMessage: Message = {
+      id: `msg-${Date.now()}`,
+      chatId: selectedChatId,
+      senderId: "user1",
+      senderName: "João Silva",
+      type: "text",
+      content: content.trim(),
+      timestamp: new Date(),
+      status: "sending"
+    }
+
+    // Adicionar mensagem otimisticamente
+    setMessages(prev => [...prev, newMessage])
+
+    // Simular envio
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === newMessage.id 
+          ? { ...msg, status: "sent" as MessageStatus }
+          : msg
+      ))
+
+      // Atualizar última mensagem do chat
+      setChats(prev => prev.map(chat => 
+        chat.id === selectedChatId
+          ? { ...chat, lastMessage: { ...newMessage, status: "sent" as MessageStatus }, updatedAt: new Date() }
+          : chat
+      ))
+
+      // Simular status delivered após 1 segundo
+      setTimeout(() => {
+        setMessages(prev => prev.map(msg => 
+          msg.id === newMessage.id 
+            ? { ...msg, status: "delivered" as MessageStatus }
+            : msg
+        ))
+      }, 1000)
+    }, 500)
+  }, [selectedChatId])
+
+  // Enviar áudio
+  const sendAudio = useCallback(async (audioBlob: Blob) => {
+    if (!selectedChatId) return
+
+    const audioUrl = URL.createObjectURL(audioBlob)
+    const newMessage: Message = {
+      id: `msg-${Date.now()}`,
+      chatId: selectedChatId,
+      senderId: "user1",
+      senderName: "João Silva",
+      type: "audio",
+      audioUrl,
+      timestamp: new Date(),
+      status: "sending"
+    }
+
+    setMessages(prev => [...prev, newMessage])
+
+    // Simular upload
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === newMessage.id 
+          ? { ...msg, status: "sent" as MessageStatus }
+          : msg
+      ))
+
+      setChats(prev => prev.map(chat => 
+        chat.id === selectedChatId
+          ? { ...chat, lastMessage: { ...newMessage, status: "sent" as MessageStatus }, updatedAt: new Date() }
+          : chat
+      ))
+
+      toast.success("Áudio enviado com sucesso")
+    }, 1000)
+  }, [selectedChatId])
+
+  // Enviar anexo
+  const sendAttachment = useCallback(async (file: File) => {
+    if (!selectedChatId) return
+
+    const attachmentUrl = URL.createObjectURL(file)
+    const newMessage: Message = {
+      id: `msg-${Date.now()}`,
+      chatId: selectedChatId,
+      senderId: "user1",
+      senderName: "João Silva",
+      type: "attachment",
+      attachmentUrl,
+      attachmentName: file.name,
+      attachmentSize: file.size,
+      timestamp: new Date(),
+      status: "sending"
+    }
+
+    setMessages(prev => [...prev, newMessage])
+
+    // Simular upload
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === newMessage.id 
+          ? { ...msg, status: "sent" as MessageStatus }
+          : msg
+      ))
+
+      setChats(prev => prev.map(chat => 
+        chat.id === selectedChatId
+          ? { ...chat, lastMessage: { ...newMessage, status: "sent" as MessageStatus }, updatedAt: new Date() }
+          : chat
+      ))
+
+      toast.success("Arquivo enviado com sucesso")
+    }, 1500)
+  }, [selectedChatId])
+
+  // Iniciar chat com cliente externo
+  const startExternalChat = useCallback(async (data: ExternalChatForm) => {
+    setLoading(true)
+    
     try {
-      setState(prev => ({ ...prev, loading: true }))
+      // Simular criação de chat e geração de link
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
-      // Gerar link seguro
-      const secureLink = `https://callistra.com/chat/secure/${Math.random().toString(36).substr(2, 9)}`
-      
       const newChat: Chat = {
         id: `chat-${Date.now()}`,
         type: "external",
         participants: [
-          { id: "user1", name: "Usuário Atual", email: "usuario@callistra.com", type: "user" },
-          { id: `client-${Date.now()}`, name: data.clientName, email: data.clientEmail, type: "external_client" }
+          { id: "user1", name: "João Silva", email: "joao@escritorio.com", isOnline: true, isExternal: false },
+          { id: `client-${Date.now()}`, name: data.clientName, email: data.clientEmail, isOnline: false, isExternal: true }
         ],
         unreadCount: 0,
-        isActive: true,
-        secureLink,
-        clientEmail: data.clientEmail,
-        clientDocumentDigits: data.documentDigits,
+        status: "active",
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        secureLink: `https://callistra.com/chat/secure/${Math.random().toString(36).substr(2, 9)}`,
+        clientEmail: data.clientEmail,
+        clientDocumentDigits: data.clientDocument.replace(/\D/g, '').substr(0, 5)
       }
 
-      setState(prev => ({
-        ...prev,
-        chats: [newChat, ...prev.chats],
-        loading: false
-      }))
+      setChats(prev => [newChat, ...prev])
+      setSelectedChatId(newChat.id)
 
-      // Simular envio do link
-      if (data.sendMethod === 'email') {
-        toast.success(`Link enviado para ${data.clientEmail}`, { duration: 3000 })
-      } else {
-        toast.success("Link enviado via WhatsApp", { duration: 3000 })
+      // Simular envio de link
+      if (data.sendMethod === "email") {
+        toast.success(`Link enviado para ${data.clientEmail}`)
+      } else if (data.whatsappNumber) {
+        toast.success(`Link enviado via WhatsApp para ${data.whatsappNumber}`)
+      }
+
+      // Enviar mensagem inicial se fornecida
+      if (data.initialMessage) {
+        setTimeout(() => sendMessage(data.initialMessage!), 500)
       }
 
       return newChat
-    } catch (error) {
-      setState(prev => ({ ...prev, loading: false }))
-      toast.error("Erro ao criar chat com cliente")
-      throw error
+    } catch (err) {
+      setError("Erro ao criar chat externo")
+      toast.error("Erro ao criar chat externo")
+      throw err
+    } finally {
+      setLoading(false)
     }
-  }, [])
+  }, [sendMessage])
 
-  // Buscar conversas
-  const searchChats = useCallback((term: string) => {
-    setState(prev => ({ ...prev, searchTerm: term }))
-  }, [])
-
-  // Filtrar conversas baseado na busca
-  const filteredChats = state.chats.filter(chat => {
-    if (!state.searchTerm) return true
+  // Autenticar cliente externo
+  const authenticateClient = useCallback(async (data: ClientAuthForm, chatId: string) => {
+    setLoading(true)
     
-    const searchLower = state.searchTerm.toLowerCase()
-    return (
-      chat.participants.some(p => 
-        p.name.toLowerCase().includes(searchLower) ||
-        p.email.toLowerCase().includes(searchLower)
-      ) ||
-      chat.lastMessage?.content.toLowerCase().includes(searchLower)
-    )
-  })
-
-  // Validar acesso de cliente externo
-  const validateExternalAccess = useCallback(async (data: ExternalAccessFormData, chatId: string) => {
     try {
-      const chat = state.chats.find(c => c.id === chatId && c.type === 'external')
-      
-      if (!chat) {
-        throw new Error("Chat não encontrado")
-      }
+      // Simular validação
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
-      if (chat.clientEmail !== data.email || chat.clientDocumentDigits !== data.documentDigits) {
+      const chat = chats.find(c => c.id === chatId)
+      
+      if (!chat || chat.clientEmail !== data.email || chat.clientDocumentDigits !== data.documentDigits) {
         throw new Error("Acesso negado. Verifique seus dados.")
       }
 
-      return chat
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro de validação")
-      throw error
+      toast.success("Autenticado com sucesso!")
+      return true
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Erro na autenticação"
+      setError(errorMessage)
+      toast.error(errorMessage)
+      return false
+    } finally {
+      setLoading(false)
     }
-  }, [state.chats])
+  }, [chats])
 
   // Encerrar chat
   const closeChat = useCallback(async (chatId: string) => {
+    setLoading(true)
+    
     try {
-      setState(prev => ({
-        ...prev,
-        chats: prev.chats.map(chat => 
-          chat.id === chatId ? { ...chat, isActive: false } : chat
-        ),
-        selectedChat: prev.selectedChat?.id === chatId ? null : prev.selectedChat
-      }))
+      await new Promise(resolve => setTimeout(resolve, 500))
 
-      toast.success("Chat encerrado e movido para histórico", { duration: 2000 })
-    } catch (error) {
-      toast.error("Erro ao encerrar chat")
-    }
-  }, [])
+      setChats(prev => prev.map(chat => 
+        chat.id === chatId 
+          ? { ...chat, status: "closed" }
+          : chat
+      ))
 
-  // Cleanup WebSocket
-  useEffect(() => {
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
+      if (selectedChatId === chatId) {
+        setSelectedChatId(null)
+        setMessages([])
       }
+
+      toast.success("Chat encerrado com sucesso")
+    } catch (err) {
+      setError("Erro ao encerrar chat")
+      toast.error("Erro ao encerrar chat")
+    } finally {
+      setLoading(false)
     }
-  }, [])
+  }, [selectedChatId])
+
+  // Indicador de digitação
+  const sendTypingIndicator = useCallback((isTyping: boolean) => {
+    if (!selectedChatId) return
+
+    // Limpar timeout anterior
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+
+    // Simular envio de indicador
+    if (isTyping) {
+      typingTimeoutRef.current = setTimeout(() => {
+        sendTypingIndicator(false)
+      }, 3000)
+    }
+  }, [selectedChatId])
+
+  // Buscar conversas
+  const filteredChats = chats.filter(chat => {
+    if (!searchQuery) return true
+    
+    const query = searchQuery.toLowerCase()
+    return (
+      chat.participants.some(p => 
+        p.name.toLowerCase().includes(query) || 
+        p.email.toLowerCase().includes(query)
+      ) ||
+      chat.lastMessage?.content?.toLowerCase().includes(query)
+    )
+  })
 
   return {
-    // State
     chats: filteredChats,
-    selectedChat: state.selectedChat,
-    messages: state.selectedChat ? state.messages[state.selectedChat.id] || [] : [],
-    loading: state.loading,
-    error: state.error,
-    searchTerm: state.searchTerm,
-    isConnected: state.isConnected,
-    
-    // Actions
-    selectChat,
+    selectedChatId,
+    messages,
+    loading,
+    error,
+    searchQuery,
+    typingUsers,
+    notifications,
+    isRecording,
+    setSelectedChatId,
+    setSearchQuery,
+    setIsRecording,
     sendMessage,
-    createExternalChat,
-    searchChats,
-    validateExternalAccess,
-    closeChat
+    sendAudio,
+    sendAttachment,
+    startExternalChat,
+    authenticateClient,
+    closeChat,
+    sendTypingIndicator
   }
 }

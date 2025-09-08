@@ -1,487 +1,397 @@
-import { useState, useEffect, useCallback } from 'react'
-import { toast } from 'sonner'
-import { 
-  Cliente, 
-  ClienteFormData, 
-  FiltrosCliente, 
-  PaginacaoCliente,
-  AcaoCliente,
-  HistoricoFinanceiro,
-  TipoCliente,
-  StatusCliente,
-  AlertaConfidencialidade
-} from './types'
+"use client"
 
-// Mock data inicial para demonstração
+import { useState, useCallback, useEffect } from "react"
+import { toast } from "sonner"
+import { Cliente, ClienteFilters, ClienteFormData } from "./types"
+
+// Mock data para desenvolvimento
 const mockClientes: Cliente[] = [
   {
-    id: '1',
-    tipoCliente: TipoCliente.PESSOA_FISICA,
-    nome: 'João Silva Santos',
-    cpf: '123.456.789-00',
-    dataNascimento: '1985-03-15',
-    telefone: '(11) 99999-1234',
-    email: 'joao.silva@email.com',
-    cep: '01310-100',
-    rua: 'Av. Paulista',
-    numero: '1000',
-    bairro: 'Bela Vista',
-    cidade: 'São Paulo',
-    estado: 'SP',
+    id: "1",
+    tipo: "pessoa_fisica",
+    nome: "João da Silva",
+    cpfCnpj: "12345678901",
+    dataNascimento: "1985-03-15",
+    telefone: "11999999999",
+    email: "joao@exemplo.com",
+    cep: "01310100",
+    rua: "Av. Paulista",
+    numero: "1000",
+    bairro: "Bela Vista",
+    cidade: "São Paulo",
+    estado: "SP",
     confidencial: false,
-    status: StatusCliente.ATIVO,
-    login: 'joao.silva',
-    senha: '******',
-    anexos: []
+    status: "ativo",
+    login: "joao.silva",
+    anexos: [],
+    historicoFinanceiro: [
+      {
+        id: "1",
+        tipo: "receita",
+        descricao: "Honorários - Processo 123",
+        valor: 5000,
+        dataVencimento: new Date("2024-01-15"),
+        dataPagamento: new Date("2024-01-10"),
+        status: "pago"
+      },
+      {
+        id: "2",
+        tipo: "receita",
+        descricao: "Consulta jurídica",
+        valor: 800,
+        dataVencimento: new Date("2024-02-15"),
+        status: "pendente"
+      }
+    ],
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
   {
-    id: '2',
-    tipoCliente: TipoCliente.PESSOA_JURIDICA,
-    razaoSocial: 'Empresa XYZ Ltda',
-    cnpj: '12.345.678/0001-90',
-    responsavel: 'Maria Santos',
-    telefone: '(11) 3333-4567',
-    email: 'contato@empresaxyz.com',
-    cep: '04567-890',
-    rua: 'Rua das Empresas',
-    numero: '500',
-    bairro: 'Vila Empresarial',
-    cidade: 'São Paulo',
-    estado: 'SP',
+    id: "2",
+    tipo: "pessoa_juridica",
+    nome: "Empresa XYZ Ltda",
+    cpfCnpj: "12345678000190",
+    responsavel: "Maria Santos",
+    telefone: "11888888888",
+    email: "contato@xyz.com",
+    banco: "Banco do Brasil",
+    agencia: "1234",
+    contaCorrente: "56789-0",
+    chavePix: "12345678000190",
+    cep: "04567000",
+    rua: "Rua dos Empresários",
+    numero: "500",
+    complemento: "Sala 1001",
+    bairro: "Vila Olímpia",
+    cidade: "São Paulo",
+    estado: "SP",
     confidencial: true,
-    status: StatusCliente.ATIVO,
-    login: 'empresa.xyz',
-    senha: '******',
-    anexos: []
-  }
-]
-
-const mockHistoricoFinanceiro: HistoricoFinanceiro[] = [
-  {
-    id: '1',
-    tipo: 'receber',
-    descricao: 'Honorários - Processo Civil',
-    valor: 5000.00,
-    dataVencimento: new Date('2024-12-15'),
-    status: 'pendente',
-    observacoes: 'Primeira parcela'
+    status: "ativo",
+    login: "empresa.xyz",
+    anexos: [
+      {
+        id: "1",
+        nome: "Contrato Social.pdf",
+        tipo: "application/pdf",
+        tamanho: 2048000,
+        url: "/docs/contrato-social.pdf",
+        dataUpload: new Date()
+      }
+    ],
+    historicoFinanceiro: [
+      {
+        id: "3",
+        tipo: "receita",
+        descricao: "Consultoria mensal",
+        valor: 15000,
+        dataVencimento: new Date("2024-01-05"),
+        dataPagamento: new Date("2024-01-05"),
+        status: "pago"
+      }
+    ],
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
   {
-    id: '2',
-    tipo: 'pagar',
-    descricao: 'Custas processuais',
-    valor: 800.00,
-    dataVencimento: new Date('2024-11-30'),
-    dataPagamento: new Date('2024-11-25'),
-    status: 'pago'
+    id: "3",
+    tipo: "parceiro",
+    nome: "Advocacia Associada & Cia",
+    cpfCnpj: "98765432000187",
+    responsavel: "Dr. Carlos Mendes",
+    telefone: "11777777777",
+    email: "parceria@advocaciaassociada.com",
+    banco: "Itaú",
+    agencia: "5678",
+    contaCorrente: "12345-6",
+    chavePix: "parceria@advocaciaassociada.com",
+    cep: "01234000",
+    rua: "Rua da Consolação",
+    numero: "2000",
+    complemento: "Conjunto 1501",
+    bairro: "Consolação",
+    cidade: "São Paulo",
+    estado: "SP",
+    confidencial: false,
+    status: "ativo",
+    login: "advocacia.parceira",
+    anexos: [
+      {
+        id: "2",
+        nome: "Acordo de Parceria.pdf",
+        tipo: "application/pdf",
+        tamanho: 1536000,
+        url: "/docs/acordo-parceria.pdf",
+        dataUpload: new Date()
+      },
+      {
+        id: "3",
+        nome: "Certificado OAB.pdf",
+        tipo: "application/pdf",
+        tamanho: 1024000,
+        url: "/docs/certificado-oab.pdf",
+        dataUpload: new Date()
+      }
+    ],
+    historicoFinanceiro: [
+      {
+        id: "4",
+        tipo: "receita",
+        descricao: "Comissão - Processo 456",
+        valor: 3000,
+        dataVencimento: new Date("2024-01-20"),
+        dataPagamento: new Date("2024-01-18"),
+        status: "pago"
+      },
+      {
+        id: "5",
+        tipo: "receita",
+        descricao: "Comissão - Processo 789",
+        valor: 4500,
+        dataVencimento: new Date("2024-02-20"),
+        status: "pendente"
+      }
+    ],
+    createdAt: new Date(),
+    updatedAt: new Date()
   }
 ]
 
 export function useClientes() {
-  // Estados principais
-  const [clientes, setClientes] = useState<Cliente[]>(mockClientes.filter(cliente => cliente !== null))
+  const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
-  // Estados para formulário
-  const [mostrarFormulario, setMostrarFormulario] = useState(false)
-  const [clienteEditando, setClienteEditando] = useState<Cliente | null>(null)
-  const [modoFormulario, setModoFormulario] = useState<'criar' | 'editar'>('criar')
-  
-  // Estados para visualização e histórico
-  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null)
-  const [mostrarDetalhes, setMostrarDetalhes] = useState(false)
-  const [mostrarHistorico, setMostrarHistorico] = useState(false)
-  const [historicoFinanceiro, setHistoricoFinanceiro] = useState<HistoricoFinanceiro[]>([])
-  
-  // Estados para busca e filtros
-  const [filtros, setFiltros] = useState<FiltrosCliente>({
-    termo: '',
-    tipoCliente: 'todos',
-    status: 'todos',
-    confidencial: 'todos'
-  })
-  
-  // Estados para paginação
-  const [paginacao, setPaginacao] = useState<PaginacaoCliente>({
-    página: 1,
-    itensPorPagina: 10,
-    total: mockClientes.length,
-    totalPaginas: Math.ceil(mockClientes.length / 10)
-  })
+  const [filters, setFilters] = useState<ClienteFilters>({})
 
-  // Função para validar CPF/CNPJ único - AC-03
-  const validarDocumentoUnico = useCallback((documento: string, idExcluir?: string): boolean => {
-    const documentoLimpo = documento.replace(/[^\d]/g, '')
-    return !clientes.filter(cliente => cliente !== null).some(cliente => {
-      if (cliente.id === idExcluir) return false
-      const clienteDoc = (cliente.cpf || cliente.cnpj || '').replace(/[^\d]/g, '')
-      return clienteDoc === documentoLimpo
-    })
-  }, [clientes])
-
-  // Função para criar cliente - UC-01, UC-02
-  const criarCliente = useCallback(async (dadosCliente: ClienteFormData): Promise<boolean> => {
+  // Carregar clientes
+  const loadClientes = useCallback(async () => {
     setLoading(true)
     setError(null)
-
-    try {
-      // Validar documento único
-      const documento = dadosCliente.tipoCliente === TipoCliente.PESSOA_FISICA 
-        ? dadosCliente.cpf! 
-        : dadosCliente.cnpj!
-      
-      if (!validarDocumentoUnico(documento)) {
-        toast.error("Documento já cadastrado no sistema")
-        return false
-      }
-
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const novoCliente: Cliente = {
-        ...dadosCliente,
-        id: Date.now().toString(),
-        anexos: dadosCliente.anexos || []
-      }
-
-      setClientes(prev => [...prev.filter(c => c !== null), novoCliente])
-      
-      toast.success("Cliente criado com sucesso!", {
-        duration: 2000,
-        position: "bottom-right"
-      })
-
-      setMostrarFormulario(false)
-      return true
-
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao criar cliente"
-      setError(message)
-      toast.error(message, {
-        duration: 3000,
-        position: "bottom-right"
-      })
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }, [validarDocumentoUnico])
-
-  // Função para editar cliente - UC-04
-  const editarCliente = useCallback(async (dadosCliente: ClienteFormData): Promise<boolean> => {
-    if (!clienteEditando) return false
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Validar documento único (excluindo o próprio cliente)
-      const documento = dadosCliente.tipoCliente === TipoCliente.PESSOA_FISICA 
-        ? dadosCliente.cpf! 
-        : dadosCliente.cnpj!
-      
-      if (!validarDocumentoUnico(documento, clienteEditando.id)) {
-        toast.error("Documento já cadastrado no sistema")
-        return false
-      }
-
-      // Verificar mudança na confidencialidade - AC-04
-      const mudouConfidencialidade = clienteEditando.confidencial !== dadosCliente.confidencial
-      
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const clienteAtualizado: Cliente = {
-        ...dadosCliente,
-        id: clienteEditando.id,
-        anexos: dadosCliente.anexos || []
-      }
-
-      setClientes(prev => 
-        prev.filter(c => c !== null).map(cliente => 
-          cliente.id === clienteEditando.id ? clienteAtualizado : cliente
-        )
-      )
-
-      // Gerar alerta se mudou confidencialidade - AC-04
-      if (mudouConfidencialidade) {
-        const alerta: AlertaConfidencialidade = {
-          clienteId: clienteEditando.id!,
-          clienteNome: dadosCliente.nome || dadosCliente.razaoSocial || 'Cliente',
-          usuarioId: 'user-1', // Simular usuário logado
-          usuarioNome: 'Usuário Atual',
-          dataAlteracao: new Date(),
-          acao: dadosCliente.confidencial ? 'adicionou' : 'removeu'
-        }
-        
-        // Simular notificação para administradores
-        toast.info(
-          `Alerta: Confidencialidade ${alerta.acao} para cliente ${alerta.clienteNome}`,
-          { duration: 5000 }
-        )
-      }
-      
-      toast.success("Dados atualizados com sucesso", {
-        duration: 2000,
-        position: "bottom-right"
-      })
-
-      setMostrarFormulario(false)
-      setClienteEditando(null)
-      return true
-
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao editar cliente"
-      setError(message)
-      toast.error(message, {
-        duration: 3000,
-        position: "bottom-right"
-      })
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }, [clienteEditando, validarDocumentoUnico])
-
-  // Função para excluir cliente - UC-05
-  const excluirCliente = useCallback(async (cliente: Cliente): Promise<boolean> => {
-    setLoading(true)
-
-    try {
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      setClientes(prev => prev.filter(c => c !== null && c.id !== cliente.id))
-      
-      toast.success("Cliente excluído com sucesso", {
-        duration: 2000,
-        position: "bottom-right"
-      })
-
-      return true
-
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao excluir cliente"
-      toast.error(message, {
-        duration: 3000,
-        position: "bottom-right"
-      })
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Função para buscar histórico financeiro - AC-06
-  const buscarHistoricoFinanceiro = useCallback(async (clienteId: string): Promise<void> => {
-    setLoading(true)
-
+    
     try {
       // Simular delay de API
       await new Promise(resolve => setTimeout(resolve, 500))
-
-      // Simular dados do histórico financeiro
-      setHistoricoFinanceiro(mockHistoricoFinanceiro)
-
+      
+      // Aplicar filtros
+      let filteredClientes = [...mockClientes]
+      
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase()
+        filteredClientes = filteredClientes.filter(
+          c => c.nome.toLowerCase().includes(searchLower) ||
+               c.cpfCnpj.includes(filters.search!) ||
+               c.email.toLowerCase().includes(searchLower)
+        )
+      }
+      
+      if (filters.tipo) {
+        filteredClientes = filteredClientes.filter(c => c.tipo === filters.tipo)
+      }
+      
+      if (filters.status) {
+        filteredClientes = filteredClientes.filter(c => c.status === filters.status)
+      }
+      
+      if (filters.confidencial !== undefined) {
+        filteredClientes = filteredClientes.filter(c => c.confidencial === filters.confidencial)
+      }
+      
+      setClientes(filteredClientes)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao buscar histórico"
-      setError(message)
-      toast.error(message)
+      setError("Erro ao carregar clientes")
+      toast.error("Erro ao carregar clientes")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filters])
 
-  // Função para anexar documentos - UC-08
-  const anexarDocumento = useCallback(async (clienteId: string, arquivo: File): Promise<boolean> => {
+  // Criar cliente
+  const createCliente = useCallback(async (data: ClienteFormData) => {
     setLoading(true)
-
+    setError(null)
+    
     try {
-      // Simular upload
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      const novoAnexo = {
+      // Verificar CPF/CNPJ duplicado
+      const exists = mockClientes.some(c => c.cpfCnpj === data.cpfCnpj)
+      if (exists) {
+        throw new Error("Documento já cadastrado no sistema")
+      }
+      
+      // Simular delay de API
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const newCliente: Cliente = {
+        ...data,
         id: Date.now().toString(),
-        nome: arquivo.name,
-        tipo: arquivo.type,
-        url: URL.createObjectURL(arquivo),
+        anexos: [],
+        historicoFinanceiro: [],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+      
+      mockClientes.push(newCliente)
+      await loadClientes()
+      
+      toast.success("Cliente criado com sucesso")
+      return newCliente
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao criar cliente"
+      setError(message)
+      toast.error(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [loadClientes])
+
+  // Atualizar cliente
+  const updateCliente = useCallback(async (id: string, data: Partial<ClienteFormData>) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // Simular delay de API
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const index = mockClientes.findIndex(c => c.id === id)
+      if (index === -1) {
+        throw new Error("Cliente não encontrado")
+      }
+      
+      const oldCliente = mockClientes[index]
+      
+      // Verificar se removeu confidencialidade
+      if (oldCliente.confidencial && data.confidencial === false) {
+        // Aqui seria enviado alerta para administradores
+        console.log("ALERTA: Confidencialidade removida do cliente", oldCliente.nome)
+        toast.warning("Alerta enviado aos administradores sobre remoção de confidencialidade", {
+          duration: 5000
+        })
+      }
+      
+      mockClientes[index] = {
+        ...oldCliente,
+        ...data,
+        updatedAt: new Date()
+      }
+      
+      await loadClientes()
+      toast.success("Dados atualizados com sucesso")
+      
+      return mockClientes[index]
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao atualizar cliente"
+      setError(message)
+      toast.error(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [loadClientes])
+
+  // Excluir cliente
+  const deleteCliente = useCallback(async (id: string) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // Simular delay de API
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const index = mockClientes.findIndex(c => c.id === id)
+      if (index === -1) {
+        throw new Error("Cliente não encontrado")
+      }
+      
+      mockClientes.splice(index, 1)
+      await loadClientes()
+      
+      toast.success("Cliente excluído com sucesso")
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao excluir cliente"
+      setError(message)
+      toast.error(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [loadClientes])
+
+  // Anexar documento
+  const attachDocument = useCallback(async (clienteId: string, file: File) => {
+    try {
+      const cliente = mockClientes.find(c => c.id === clienteId)
+      if (!cliente) {
+        throw new Error("Cliente não encontrado")
+      }
+      
+      const anexo: Anexo = {
+        id: Date.now().toString(),
+        nome: file.name,
+        tipo: file.type,
+        tamanho: file.size,
+        url: URL.createObjectURL(file),
         dataUpload: new Date()
       }
-
-      setClientes(prev => 
-        prev.filter(c => c !== null).map(cliente => 
-          cliente.id === clienteId 
-            ? { ...cliente, anexos: [...cliente.anexos, novoAnexo] }
-            : cliente
-        )
-      )
-
-      toast.success("Documento anexado ao perfil do cliente", {
-        duration: 2000,
-        position: "bottom-right"
-      })
-
-      return true
-
+      
+      if (!cliente.anexos) {
+        cliente.anexos = []
+      }
+      cliente.anexos.push(anexo)
+      
+      await loadClientes()
+      toast.success("Documento anexado ao perfil do cliente")
+      
+      return anexo
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao anexar documento"
       toast.error(message)
-      return false
-    } finally {
-      setLoading(false)
+      throw err
     }
-  }, [])
+  }, [loadClientes])
 
-  // Filtrar clientes baseado nos filtros - UC-06, UC-07
-  const clientesFiltrados = clientes.filter(cliente => {
-    // Verificar se o cliente não é null
-    if (!cliente) return false
-    
-    // Filtro por termo (nome/documento) - UC-06
-    if (filtros.termo) {
-      const termo = filtros.termo.toLowerCase()
-      const nome = (cliente.nome || cliente.razaoSocial || '').toLowerCase()
-      const documento = (cliente.cpf || cliente.cnpj || '').replace(/[^\d]/g, '')
-      const termoLimpo = filtros.termo.replace(/[^\d]/g, '')
+  // Buscar CEP
+  const buscarCep = useCallback(async (cep: string) => {
+    try {
+      const cleanCep = cep.replace(/\D/g, "")
       
-      if (!nome.includes(termo) && !documento.includes(termoLimpo)) {
-        return false
+      if (cleanCep.length !== 8) {
+        throw new Error("CEP inválido")
       }
+      
+      // Simular busca de CEP
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Mock de retorno
+      return {
+        cep: cleanCep,
+        rua: "Avenida Paulista",
+        bairro: "Bela Vista",
+        cidade: "São Paulo",
+        estado: "SP"
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao buscar CEP"
+      toast.error(message)
+      throw err
     }
+  }, [])
 
-    // Filtro por tipo
-    if (filtros.tipoCliente && filtros.tipoCliente !== 'todos') {
-      if (cliente.tipoCliente !== filtros.tipoCliente) return false
-    }
-
-    // Filtro por status - UC-07
-    if (filtros.status && filtros.status !== 'todos') {
-      if (cliente.status !== filtros.status) return false
-    }
-
-    // Filtro por confidencialidade
-    if (filtros.confidencial !== 'todos') {
-      if (cliente.confidencial !== filtros.confidencial) return false
-    }
-
-    return true
-  })
-
-  // Atualizar paginação quando filtros mudam
+  // Carregar clientes ao montar o componente
   useEffect(() => {
-    const total = clientesFiltrados.length
-    const totalPaginas = Math.ceil(total / paginacao.itensPorPagina)
-    
-    setPaginacao(prev => ({
-      ...prev,
-      total,
-      totalPaginas,
-      página: Math.min(prev.página, totalPaginas || 1)
-    }))
-  }, [clientesFiltrados.length, paginacao.itensPorPagina])
-
-  // Ações da interface
-  const abrirFormularioCriacao = useCallback(() => {
-    setModoFormulario('criar')
-    setClienteEditando(null)
-    setMostrarFormulario(true)
-  }, [])
-
-  const abrirFormularioEdicao = useCallback((cliente: Cliente) => {
-    setModoFormulario('editar')
-    setClienteEditando(cliente)
-    setMostrarFormulario(true)
-  }, [])
-
-  const fecharFormulario = useCallback(() => {
-    setMostrarFormulario(false)
-    setClienteEditando(null)
-    setError(null)
-  }, [])
-
-  const abrirDetalhes = useCallback((cliente: Cliente) => {
-    setClienteSelecionado(cliente)
-    setMostrarDetalhes(true)
-  }, [])
-
-  const fecharDetalhes = useCallback(() => {
-    setMostrarDetalhes(false)
-    setClienteSelecionado(null)
-  }, [])
-
-  const abrirHistorico = useCallback((cliente: Cliente) => {
-    setClienteSelecionado(cliente)
-    setMostrarHistorico(true)
-    buscarHistoricoFinanceiro(cliente.id!)
-  }, [buscarHistoricoFinanceiro])
-
-  const fecharHistorico = useCallback(() => {
-    setMostrarHistorico(false)
-    setClienteSelecionado(null)
-    setHistoricoFinanceiro([])
-  }, [])
-
-  // Manipular ações da tabela - AC-07
-  const handleAcaoCliente = useCallback((acao: AcaoCliente) => {
-    switch (acao.tipo) {
-      case 'visualizar':
-        abrirDetalhes(acao.cliente)
-        break
-      case 'editar':
-        abrirFormularioEdicao(acao.cliente)
-        break
-      case 'excluir':
-        // Será tratado pelo componente com AlertDialog
-        break
-      case 'historico':
-        abrirHistorico(acao.cliente)
-        break
-    }
-  }, [abrirDetalhes, abrirFormularioEdicao, abrirHistorico])
+    loadClientes()
+  }, [loadClientes])
 
   return {
-    // Estados principais
-    clientes: clientesFiltrados,
+    clientes,
     loading,
     error,
-    
-    // Estados de formulário
-    mostrarFormulario,
-    clienteEditando,
-    modoFormulario,
-    
-    // Estados de visualização
-    clienteSelecionado,
-    mostrarDetalhes,
-    mostrarHistorico,
-    historicoFinanceiro,
-    
-    // Estados de busca/filtros
-    filtros,
-    paginacao,
-    
-    // Ações de CRUD
-    criarCliente,
-    editarCliente,
-    excluirCliente,
-    anexarDocumento,
-    
-    // Ações de interface
-    abrirFormularioCriacao,
-    abrirFormularioEdicao,
-    fecharFormulario,
-    abrirDetalhes,
-    fecharDetalhes,
-    abrirHistorico,
-    fecharHistorico,
-    handleAcaoCliente,
-    
-    // Ações de filtro
-    setFiltros,
-    setPaginacao,
-    
-    // Utilitários
-    validarDocumentoUnico
+    filters,
+    setFilters,
+    createCliente,
+    updateCliente,
+    deleteCliente,
+    attachDocument,
+    buscarCep,
+    refresh: loadClientes
   }
 }

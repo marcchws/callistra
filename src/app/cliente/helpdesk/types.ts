@@ -1,89 +1,74 @@
 import { z } from "zod"
 
-// Tipos baseados nos campos especificados no PRD - Requirements Lock
-export interface Ticket {
+// Enums
+export const TicketStatus = {
+  ABERTO: "aberto",
+  EM_ATENDIMENTO: "em_atendimento",
+  RESOLVIDO: "resolvido",
+  FECHADO: "fechado",
+} as const
+
+export type TicketStatusType = typeof TicketStatus[keyof typeof TicketStatus]
+
+// Tipos de dados
+export interface Attachment {
   id: string
-  nomeCliente: string
-  emailCliente: string
-  motivoSuporte: string
-  descricao: string
-  anexoInicial?: string
-  status: 'aberto' | 'em_atendimento' | 'resolvido' | 'fechado'
-  dataHoraAbertura: Date
-  historicoInteracoes: TicketInteraction[]
-  createdAt: Date
-  updatedAt: Date
+  name: string
+  url: string
+  size: number
+  type: string
+  uploadedAt: Date
 }
 
-export interface TicketInteraction {
+export interface Message {
   id: string
   ticketId: string
+  content: string
   senderId: string
   senderName: string
-  senderType: 'cliente' | 'atendente'
-  content: string
-  type: 'text' | 'file'
-  fileName?: string
-  fileSize?: number
-  filePath?: string
-  timestamp: Date
-  isRead: boolean
+  senderType: "cliente" | "atendente"
+  attachments: Attachment[]
+  createdAt: Date
+  read: boolean
 }
 
-// Schemas de validação baseados nos critérios de aceite
-export const createTicketSchema = z.object({
-  nomeCliente: z.string().min(1, "Nome do cliente é obrigatório"),
-  emailCliente: z.string().email("E-mail inválido").min(1, "E-mail é obrigatório"),
-  motivoSuporte: z.string().min(1, "Motivo do suporte é obrigatório"),
-  descricao: z.string().min(1, "Descrição é obrigatória")
+export interface Ticket {
+  id: string
+  clientName: string
+  clientEmail: string
+  subject: string
+  description: string
+  status: TicketStatusType
+  initialAttachment?: Attachment
+  messages: Message[]
+  createdAt: Date
+  updatedAt: Date
+  closedAt?: Date
+  reopenedAt?: Date
+  attendantId?: string
+  attendantName?: string
+  unreadCount: number
+}
+
+// Schemas de validação
+export const newTicketSchema = z.object({
+  clientName: z.string().min(1, "Nome do cliente é obrigatório"),
+  clientEmail: z.string().email("E-mail inválido"),
+  subject: z.string().min(1, "Motivo do suporte é obrigatório"),
+  description: z.string().min(10, "Descrição deve ter no mínimo 10 caracteres"),
+  attachment: z.any().optional(),
 })
 
-export const messageTicketSchema = z.object({
+export const messageSchema = z.object({
   content: z.string().min(1, "Mensagem não pode estar vazia"),
-  type: z.enum(['text', 'file']).default('text')
+  attachments: z.array(z.any()).optional(),
 })
 
-export const ticketSearchSchema = z.object({
-  searchTerm: z.string().optional(),
-  status: z.enum(['todos', 'aberto', 'em_atendimento', 'resolvido', 'fechado']).default('todos'),
-  motivo: z.string().optional()
+export const searchSchema = z.object({
+  query: z.string().optional(),
+  status: z.enum(["todos", "aberto", "em_atendimento", "resolvido", "fechado"]).optional(),
 })
 
-export type CreateTicketFormData = z.infer<typeof createTicketSchema>
-export type MessageTicketFormData = z.infer<typeof messageTicketSchema>
-export type TicketSearchFormData = z.infer<typeof ticketSearchSchema>
-
-// Estados para gerenciamento da aplicação
-export interface HelpdeskState {
-  tickets: Ticket[]
-  selectedTicket: Ticket | null
-  interactions: Record<string, TicketInteraction[]>
-  loading: boolean
-  error: string | null
-  searchTerm: string
-  statusFilter: string
-  motivoFilter: string
-}
-
-// Tipos para notificações em tempo real
-export interface TicketNotification {
-  type: 'nova_mensagem' | 'status_alterado' | 'ticket_criado'
-  ticketId: string
-  message: string
-  timestamp: Date
-}
-
-// Status labels para interface
-export const statusLabels = {
-  aberto: 'Aberto',
-  em_atendimento: 'Em Atendimento', 
-  resolvido: 'Resolvido',
-  fechado: 'Fechado'
-} as const
-
-export const statusColors = {
-  aberto: 'bg-blue-100 text-blue-800',
-  em_atendimento: 'bg-yellow-100 text-yellow-800',
-  resolvido: 'bg-green-100 text-green-800', 
-  fechado: 'bg-gray-100 text-gray-800'
-} as const
+export type NewTicketData = z.infer<typeof newTicketSchema>
+export type MessageData = z.infer<typeof messageSchema>
+export type SearchData = z.infer<typeof searchSchema>
